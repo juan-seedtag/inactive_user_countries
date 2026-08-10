@@ -1,0 +1,11 @@
+# Credentials — never commit these.
+token.json
+credentials.json
+drive_sa.json
+*.pem
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store

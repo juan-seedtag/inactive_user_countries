@@ -1,0 +1,5 @@
+trino[sqlalchemy]>=0.330.0
+sqlalchemy>=2.0
+google-auth>=2.0
+google-auth-oauthlib>=1.0
+requests>=2.31

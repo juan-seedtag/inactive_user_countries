@@ -1,0 +1,136 @@
+<title>Inactive User Countries — SSP Supply Health</title>
+<style>
+:root{
+  --bg:#f7f8f7; --surface:#ffffff; --ink:#1c2321; --muted:#5c6b66; --line:#dde4e1;
+  --accent:#0e7a5f; --dead:#b3261e; --dead-bg:#fbeceb; --warn:#8a6d00; --warn-bg:#f7f1dc;
+  --row-hover:#f0f4f2; --detail-bg:#fafcfb;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#131817; --surface:#1b2220; --ink:#e4ebe8; --muted:#8fa39c; --line:#2b3634;
+  --accent:#4dc3a2; --dead:#ff8a80; --dead-bg:#3a2321; --warn:#e0c25a; --warn-bg:#332e1c;
+  --row-hover:#212b28; --detail-bg:#171e1c;
+}}
+:root[data-theme="dark"]{
+  --bg:#131817; --surface:#1b2220; --ink:#e4ebe8; --muted:#8fa39c; --line:#2b3634;
+  --accent:#4dc3a2; --dead:#ff8a80; --dead-bg:#3a2321; --warn:#e0c25a; --warn-bg:#332e1c;
+  --row-hover:#212b28; --detail-bg:#171e1c;
+}
+:root[data-theme="light"]{
+  --bg:#f7f8f7; --surface:#ffffff; --ink:#1c2321; --muted:#5c6b66; --line:#dde4e1;
+  --accent:#0e7a5f; --dead:#b3261e; --dead-bg:#fbeceb; --warn:#8a6d00; --warn-bg:#f7f1dc;
+  --row-hover:#f0f4f2; --detail-bg:#fafcfb;
+}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:2rem 1.5rem 4rem;}
+.wrap{max-width:1080px;margin:0 auto;}
+h1{font-size:1.45rem;margin:0 0 .25rem;letter-spacing:-.01em;text-wrap:balance;}
+.sub{color:var(--muted);margin:0 0 1.25rem;font-size:.9rem;}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:.9rem 1.1rem;margin-bottom:1.25rem;display:flex;gap:2rem;align-items:center;flex-wrap:wrap;}
+.panel label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);display:block;margin-bottom:.3rem;}
+.panel .val{font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent);}
+input[type=range]{width:220px;accent-color:var(--accent);}
+input[type=number]{width:90px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:.3rem .5rem;font:inherit;font-size:.85rem;}
+.stats{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem;}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:.8rem 1.1rem;min-width:150px;flex:1;}
+.stat .k{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+.stat .v{font-size:1.5rem;font-weight:600;font-variant-numeric:tabular-nums;margin-top:.15rem;}
+.stat .v.dead{color:var(--dead);}
+.tblwrap{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow-x:auto;}
+table{border-collapse:collapse;width:100%;min-width:860px;}
+th{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-align:right;padding:.7rem .9rem;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:var(--surface);}
+th:first-child{text-align:left;}
+td{padding:.55rem .9rem;text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--line);white-space:nowrap;}
+td:first-child{text-align:left;}
+tr.country{cursor:pointer;}
+tr.country:hover{background:var(--row-hover);}
+tr.country td{font-weight:600;}
+.chev{display:inline-block;width:1em;transition:transform .15s;color:var(--muted);}
+tr.country.open .chev{transform:rotate(90deg);}
+@media (prefers-reduced-motion: reduce){.chev{transition:none;}}
+tr.detail td{background:var(--detail-bg);font-weight:400;color:var(--muted);font-size:.86rem;padding:.4rem .9rem;}
+tr.detail td:first-child{padding-left:2.4rem;color:var(--ink);}
+.pill{display:inline-block;font-size:.72rem;font-weight:600;padding:.1rem .5rem;border-radius:999px;}
+.pill.dead{background:var(--dead-bg);color:var(--dead);}
+.pill.low{background:var(--warn-bg);color:var(--warn);}
+.cc{font-weight:700;}
+.cname{color:var(--muted);font-weight:400;font-size:.85rem;margin-left:.4rem;}
+.foot{color:var(--muted);font-size:.8rem;font-style:italic;margin-top:1rem;}
+.ctrl{margin:0 0 .75rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;}
+button.tgl{background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:.35rem .8rem;font:inherit;font-size:.82rem;cursor:pointer;}
+button.tgl:hover{background:var(--row-hover);}
+button.tgl:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+</style>
+<div class="wrap">
+<h1>Inactive user countries — SSP supply health</h1>
+<p class="sub">User countries with a bid rate below __THRESHOLD_PCT__, sorted by request volume · __WINDOW_LABEL__ (last __WINDOW_DAYS__ closed days) · countries with ≥__FLOOR_LABEL__ requests</p>
+<div class="stats">
+  <div class="stat"><div class="k">Inactive countries</div><div class="v" id="s-c"></div></div>
+  <div class="stat"><div class="k">Unmonetized requests</div><div class="v dead" id="s-r"></div></div>
+  <div class="stat"><div class="k">Bids</div><div class="v" id="s-b"></div></div>
+  <div class="stat"><div class="k">Impressions</div><div class="v" id="s-i"></div></div>
+</div>
+<div class="ctrl"><button class="tgl" id="expall">Expand all</button><span class="foot" style="margin:0">Click a country to see its editorial groups (top __TOP_N__ by volume, ≥__DETAIL_FLOOR_LABEL__ requests)</span></div>
+<div class="tblwrap"><table>
+<thead><tr><th>User country</th><th>Requests</th><th>Bids</th><th>Wins</th><th>Impressions</th><th>Bid rate</th><th>Win rate</th><th>Fill rate</th><th>Status</th></tr></thead>
+<tbody id="tb"></tbody>
+</table></div>
+<p class="foot">Source: SSP events daily — all products, user-country grain, __WINDOW_LABEL__. Inactivity definition: bid rate &lt; __THRESHOLD_PCT__ with ≥__FLOOR_LABEL__ requests over the window. Editorial-group detail: top __TOP_N__ per country, ≥__DETAIL_FLOOR_LABEL__ requests. Reference points (active markets, same window): __BENCHMARKS__.</p>
+<p class="foot">Last refreshed __GENERATED_AT__ · rebuilt daily from Trino by GitHub Actions.</p>
+</div>
+<script>
+const DATA = __PAYLOAD__;
+const NAMES = {VE:"Venezuela",BF:"Burkina Faso",CN:"China",BJ:"Benin",IQ:"Iraq",FO:"Faroe Islands",NI:"Nicaragua",TD:"Chad",LB:"Lebanon",SL:"Sierra Leone",BY:"Belarus",AF:"Afghanistan",SD:"Sudan",MM:"Myanmar",ZW:"Zimbabwe",GH:"Ghana",MW:"Malawi",NA:"Namibia",CU:"Cuba",SY:"Syria",IR:"Iran",KP:"North Korea",ML:"Mali",NE:"Niger",GN:"Guinea",TG:"Togo",HT:"Haiti",YE:"Yemen",LY:"Libya",SO:"Somalia",ER:"Eritrea",TJ:"Tajikistan",TM:"Turkmenistan",GW:"Guinea-Bissau",CF:"Central African Rep.",CD:"DR Congo",CG:"Congo",BI:"Burundi",MR:"Mauritania",LR:"Liberia",GM:"Gambia",SS:"South Sudan",DJ:"Djibouti",KM:"Comoros",ET:"Ethiopia",RW:"Rwanda",MG:"Madagascar",MZ:"Mozambique",AO:"Angola",ZM:"Zambia",UG:"Uganda",TZ:"Tanzania",PG:"Papua New Guinea",LA:"Laos",KH:"Cambodia",BT:"Bhutan",MV:"Maldives",FJ:"Fiji",VU:"Vanuatu",WS:"Samoa",TO:"Tonga",SB:"Solomon Islands",TL:"Timor-Leste",SR:"Suriname",GY:"Guyana",BO:"Bolivia",PY:"Paraguay",HN:"Honduras",GT:"Guatemala",SV:"El Salvador",MX:"Mexico",RU:"Russia",UA:"Ukraine",MD:"Moldova",AM:"Armenia",AZ:"Azerbaijan",GE:"Georgia",UZ:"Uzbekistan",KG:"Kyrgyzstan",KZ:"Kazakhstan",MN:"Mongolia",NP:"Nepal",BD:"Bangladesh",LK:"Sri Lanka",PK:"Pakistan",DZ:"Algeria",MA:"Morocco",TN:"Tunisia",EG:"Egypt",JO:"Jordan",PS:"Palestine",OM:"Oman",KW:"Kuwait",BH:"Bahrain",QA:"Qatar",SA:"Saudi Arabia",AE:"UAE",IL:"Israel",TR:"Türkiye",CI:"Côte d’Ivoire",SN:"Senegal",CM:"Cameroon",GA:"Gabon",GQ:"Eq. Guinea",ST:"São Tomé",CV:"Cabo Verde",BW:"Botswana",LS:"Lesotho",SZ:"Eswatini",AL:"Albania",MK:"North Macedonia",BA:"Bosnia",RS:"Serbia",ME:"Montenegro",XK:"Kosovo",PH:"Philippines",TH:"Thailand",IN:"India",ID:"Indonesia",MY:"Malaysia",VN:"Vietnam",KR:"South Korea",TW:"Taiwan",JP:"Japan",HK:"Hong Kong",SG:"Singapore",NG:"Nigeria",KE:"Kenya",ZA:"South Africa",EG:"Egypt",US:"United States",CA:"Canada",FR:"France",DE:"Germany",ES:"Spain",IT:"Italy",GB:"United Kingdom",NL:"Netherlands",BE:"Belgium",PT:"Portugal",BR:"Brazil",AR:"Argentina",CL:"Chile",CO:"Colombia",PE:"Peru",EC:"Ecuador",UY:"Uruguay",AU:"Australia",NZ:"New Zealand",AQ:"Antarctica",KI:"Kiribati",PW:"Palau",TK:"Tokelau",TV:"Tuvalu",VC:"St. Vincent",NC:"New Caledonia",PM:"St. Pierre & Miquelon",NU:"Niue",GU:"Guam",BL:"St. Barthélemy",AW:"Aruba",IM:"Isle of Man",WF:"Wallis & Futuna",RE:"Réunion",MO:"Macao",PF:"Fr. Polynesia",TT:"Trinidad & Tobago",BM:"Bermuda",GG:"Guernsey",JE:"Jersey",MP:"N. Mariana Is.",AX:"Åland",MU:"Mauritius",DM:"Dominica",LC:"St. Lucia",AI:"Anguilla",GL:"Greenland",TC:"Turks & Caicos",FM:"Micronesia",BZ:"Belize",CK:"Cook Islands",NR:"Nauru",SJ:"Svalbard",GD:"Grenada",SX:"Sint Maarten",IS:"Iceland",BN:"Brunei",MF:"St. Martin",MS:"Montserrat",MQ:"Martinique",MH:"Marshall Is.",MT:"Malta",GF:"Fr. Guiana",MC:"Monaco",AG:"Antigua",BB:"Barbados",AD:"Andorra",VG:"Br. Virgin Is.",KN:"St. Kitts",BD:"Bangladesh",BS:"Bahamas",GP:"Guadeloupe",KY:"Cayman Is.",YT:"Mayotte",CW:"Curaçao",SC:"Seychelles",AS:"Am. Samoa",GI:"Gibraltar",FK:"Falkland Is.",DO:"Dominican Rep.",BQ:"Bonaire",VI:"US Virgin Is.",CY:"Cyprus",GR:"Greece",LT:"Lithuania",PR:"Puerto Rico",SM:"San Marino",VA:"Vatican",EE:"Estonia",JM:"Jamaica",IO:"Br. Indian Ocean Terr.",UM:"US Minor Is.",SH:"St. Helena",PN:"Pitcairn",GS:"S. Georgia",EH:"W. Sahara",NF:"Norfolk Is.",CC:"Cocos Is.",LI:"Liechtenstein",LU:"Luxembourg",MQ:"Martinique",HR:"Croatia",BG:"Bulgaria",RO:"Romania",HU:"Hungary",CZ:"Czechia",SK:"Slovakia",SI:"Slovenia",AT:"Austria",CH:"Switzerland",DK:"Denmark",SE:"Sweden",NO:"Norway",FI:"Finland",IE:"Ireland",LV:"Latvia",QA:"Qatar",PA:"Panama",CR:"Costa Rica"};
+const fmt = n => n>=1e9 ? (n/1e9).toFixed(2)+"B" : n>=1e6 ? (n/1e6).toFixed(1)+"M" : n>=1e3 ? (n/1e3).toFixed(1)+"K" : String(n);
+const pct = v => v==null ? "–" : (v*100).toFixed(v*100<0.01?4:3)+"%";
+const byC = {};
+DATA.details.forEach(d=>{(byC[d.c]=byC[d.c]||[]).push(d);});
+Object.values(byC).forEach(a=>a.sort((x,y)=>y.rq-x.rq));
+const tb = document.getElementById("tb");
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+let allOpen = false;
+function render(){
+  // Thresholds come from the payload so the page can never drift from the SQL
+  // that produced it. Rows are already filtered server-side; this is a guard.
+  const thr = DATA.meta.bid_rate_threshold;
+  const floor = DATA.meta.request_floor;
+  const cs = DATA.countries.filter(c=>c.br!=null && c.br<thr && c.rq>=floor && c.c).sort((a,b)=>b.rq-a.rq);
+  document.getElementById("s-c").textContent = cs.length;
+  document.getElementById("s-r").textContent = fmt(cs.reduce((s,c)=>s+c.rq,0));
+  document.getElementById("s-b").textContent = fmt(cs.reduce((s,c)=>s+c.b,0));
+  document.getElementById("s-i").textContent = fmt(cs.reduce((s,c)=>s+c.i,0));
+  tb.innerHTML = "";
+  cs.forEach(c=>{
+    const tr = document.createElement("tr");
+    tr.className = "country"; tr.tabIndex = 0;
+    tr.setAttribute("role","button"); tr.setAttribute("aria-expanded","false");
+    const status = c.b===0 ? '<span class="pill dead">No bids</span>' : c.br<0.001 ? '<span class="pill dead">Near zero</span>' : '<span class="pill low">Very low</span>';
+    tr.innerHTML = `<td><span class="chev">▸</span><span class="cc">${esc(c.c)}</span><span class="cname">${NAMES[c.c]||""}</span></td>
+      <td>${fmt(c.rq)}</td><td>${fmt(c.b)}</td><td>${fmt(c.w)}</td><td>${fmt(c.i)}</td>
+      <td>${pct(c.br)}</td><td>${pct(c.wr)}</td><td>${pct(c.fr)}</td><td>${status}</td>`;
+    tb.appendChild(tr);
+    const kids = (byC[c.c]||[]).map(d=>{
+      const dr = document.createElement("tr");
+      dr.className = "detail"; dr.style.display = "none";
+      dr.innerHTML = `<td>${esc(d.g||"(unknown)")}</td>
+        <td>${fmt(d.rq)}</td><td>${fmt(d.b)}</td><td>${fmt(d.w)}</td><td>${fmt(d.i)}</td>
+        <td>${pct(d.br)}</td><td>${pct(d.wr)}</td><td>${pct(d.fr)}</td><td></td>`;
+      tb.appendChild(dr);
+      return dr;
+    });
+    const setOpen = open => {
+      tr.classList.toggle("open", open);
+      tr.setAttribute("aria-expanded", open);
+      kids.forEach(k=>k.style.display = open ? "table-row" : "none");
+    };
+    if (allOpen) setOpen(true);
+    const toggle = () => setOpen(!tr.classList.contains("open"));
+    tr.addEventListener("click", toggle);
+    tr.addEventListener("keydown", e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle();}});
+  });
+}
+document.getElementById("expall").addEventListener("click", ()=>{
+  allOpen = !allOpen;
+  document.getElementById("expall").textContent = allOpen ? "Collapse all" : "Expand all";
+  render();
+});
+render();
+</script>

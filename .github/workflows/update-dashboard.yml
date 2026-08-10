@@ -1,0 +1,90 @@
+name: Update inactive-countries dashboard
+
+on:
+  schedule:
+    # Target ~09:00 Europe/Madrid (07:00 UTC in summer, 08:00 in winter).
+    # GitHub cron drifts under load — the job runs whenever it fires, with no
+    # time guard, because a strict guard silently skips delayed runs.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Window length in closed days'
+        required: false
+        default: '7'
+      end_date:
+        description: 'Last day of the window (YYYY-MM-DD, blank = yesterday)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-dashboard
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write credentials
+        env:
+          GOOGLE_TOKEN: ${{ secrets.GOOGLE_TOKEN }}
+        run: |
+          if [ -z "$GOOGLE_TOKEN" ]; then
+            echo "::error::GOOGLE_TOKEN secret is empty — cannot authenticate to Trino."
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_TOKEN" > token.json
+
+      - name: Rebuild dashboard from Trino
+        env:
+          TRINO_USER: ${{ secrets.TRINO_USER }}
+          # Passed as env rather than interpolated into the script, so a crafted
+          # dispatch input can't break out into the shell.
+          DAYS: ${{ inputs.days }}
+          END_DATE: ${{ inputs.end_date }}
+        run: |
+          args=(--days "${DAYS:-7}")
+          if [ -n "$END_DATE" ]; then
+            args+=(--end-date "$END_DATE")
+          fi
+          python scripts/update_dashboard.py "${args[@]}"
+
+      - name: Remove credentials
+        if: always()
+        run: rm -f token.json
+
+      - name: Commit refreshed dashboard
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html data/latest.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "data: daily refresh $(date -u +%F)"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
+      - name: Upload dashboard as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inactive-countries-dashboard
+          path: index.html
+          retention-days: 14
+          if-no-files-found: warn
