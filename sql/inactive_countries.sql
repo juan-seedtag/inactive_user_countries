@@ -42,8 +42,12 @@ WITH country AS (
       AND user_country NOT IN ('', 'undefined')
       AND length(user_country) = 2
     GROUP BY user_country
+    -- Watchlist countries are pinned onto the list regardless of bid rate
+    -- (the page flags them, so they are never mistaken for threshold hits).
+    -- They still need the request floor: a rate on no volume is noise.
     HAVING SUM(ssp_requests) >= {request_floor}
-       AND SUM(ssp_bids) * 1.0 / SUM(ssp_requests) < {bid_rate_threshold}
+       AND (SUM(ssp_bids) * 1.0 / SUM(ssp_requests) < {bid_rate_threshold}
+            OR user_country IN ({watchlist}))
 )
 SELECT
     user_country,

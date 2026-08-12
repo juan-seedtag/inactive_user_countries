@@ -29,11 +29,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
 # --- Inactivity definition -------------------------------------------------
-# A country is "inactive" when demand barely responds to its supply. 0.65% is
-# chosen to sit just under the big healthy-but-diluted markets (US ~0.92%,
-# CA ~0.95%) while still catching genuinely weak demand response (JP ~0.56%,
-# TH ~0.60%, SE ~0.67% hovers at the edge). FR (~0.71%) stays off the list.
-BID_RATE_THRESHOLD = 0.0065
+# A country is "inactive" when demand barely responds to its supply. 0.9% sits
+# just under the biggest diluted markets (US ~0.92%, CA ~0.95%) while catching
+# TR (~0.88%) and everything genuinely weak below it.
+BID_RATE_THRESHOLD = 0.009
+
+# Countries pinned to the list regardless of their bid rate. They render with
+# a "Watchlist" pill so the page never implies they met the threshold — this
+# is for markets someone wants to keep an eye on (HK/SG hover around 1%).
+WATCHLIST = ["TR", "SG", "HK"]
 REQUEST_FLOOR = 1_000_000      # ignore countries too small to read a rate from
 DETAIL_FLOOR = 100_000         # ignore editorial groups too small to matter
 TOP_N_GROUPS = 15              # editorial groups shown per country
@@ -109,6 +113,7 @@ def fetch(start: date, end: date) -> dict:
         "inactive_countries.sql",
         bid_rate_threshold=BID_RATE_THRESHOLD,
         request_floor=REQUEST_FLOOR,
+        watchlist=", ".join(f"'{c}'" for c in WATCHLIST) or "''",
         **common,
     )
     print(f"Phase 1: inactive countries {start} .. {end} "
@@ -189,6 +194,7 @@ def fetch(start: date, end: date) -> dict:
             "channel_top_n": CHANNEL_TOP_N,
             "adomain_top_n": ADOMAIN_TOP_N,
             "key_markets": DEMAND_KEY_MARKETS,
+            "watchlist": WATCHLIST,
         },
         "countries": countries,
         "details": details,
@@ -291,6 +297,17 @@ def render(payload: dict) -> str:
         f"{b['c']} {b['br'] * 100:.2f}%" for b in meta["benchmarks"] if b["br"] is not None
     ) or "unavailable for this window"
 
+    watchlist = meta.get("watchlist") or []
+    watchlist_note = (
+        f" · plus watchlist: {', '.join(watchlist)}" if watchlist else ""
+    )
+    watchlist_foot = (
+        f" Watchlist countries ({', '.join(watchlist)}) are pinned to the list "
+        "regardless of bid rate and flagged as such."
+        if watchlist
+        else ""
+    )
+
     substitutions = {
         "__PAYLOAD__": json.dumps(payload, separators=(",", ":"), ensure_ascii=False),
         "__WINDOW_LABEL__": window_label,
@@ -304,6 +321,8 @@ def render(payload: dict) -> str:
         "__ADOMAIN_TOP_N__": str(meta.get("adomain_top_n", ADOMAIN_TOP_N)),
         "__BENCHMARKS__": benchmarks,
         "__GENERATED_AT__": meta["generated_at"],
+        "__WATCHLIST_NOTE__": watchlist_note,
+        "__WATCHLIST_FOOT__": watchlist_foot,
     }
 
     html = TEMPLATE.read_text(encoding="utf-8")

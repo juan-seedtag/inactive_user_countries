@@ -48,7 +48,13 @@ A user country is inactive when, over the window:
 
 | Rule | Value | Why |
 |---|---|---|
-| Bid rate below | **0.65 %** | Just under the big healthy-but-diluted markets (US ~0.92 %, FR ~0.71 %), which stay off the list, while catching genuinely weak demand response (JP ~0.56 %, TH ~0.60 %) |
+| Bid rate below | **0.9 %** | Just under the biggest diluted markets (US ~0.92 %, CA ~0.95 %), which stay off the list, while catching TR (~0.88 %) and everything genuinely weak below it |
+
+A **watchlist** (`WATCHLIST` in `scripts/update_dashboard.py`, currently TR,
+SG, HK) pins countries onto the list regardless of their bid rate. They render
+with a "Watchlist" pill when they are above the threshold, so the page never
+implies they met it — this exists for markets someone wants to keep an eye on
+even in weeks when their rate floats above the line.
 | Minimum requests | **1 M** | Below this the rate is noise, not signal |
 
 Editorial-group detail shows the **top 15** groups per country with at least
