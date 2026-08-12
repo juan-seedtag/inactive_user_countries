@@ -48,7 +48,7 @@ A user country is inactive when, over the window:
 
 | Rule | Value | Why |
 |---|---|---|
-| Bid rate below | **0.5 %** | Just above Thailand (~0.49 %), well below healthy markets (0.7 %+) |
+| Bid rate below | **1 %** | Reads as "below-par demand response", not "no demand": several core markets (US ~0.9 %, FR ~0.7 % on the post-Beachfront perimeter) fall under it and appear on the list |
 | Minimum requests | **1 M** | Below this the rate is noise, not signal |
 
 Editorial-group detail shows the **top 15** groups per country with at least
