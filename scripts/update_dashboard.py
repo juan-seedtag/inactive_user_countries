@@ -192,11 +192,18 @@ def fetch(start: date, end: date) -> dict:
         "countries": countries,
         "details": details,
         "channels": [slim_channel(r) for r in channel_rows],
+        # A pipe is 1:1 only when it carried exactly one named DSP AND no
+        # unmapped traffic. One named DSP alongside NULL-DSP rows is a mixed
+        # pipe: naming it after that DSP would attribute the whole pipe's
+        # requests — and its brands — to a seat that only carried part of it.
         "chmap": {
             m["channel_id"]: {
                 "ct": m["connection_type"],
                 "n": int(m["n_dsps"]),
-                "dsp": m["single_dsp"] if int(m["n_dsps"]) == 1 else None,
+                "u": bool(m["has_unmapped"]),
+                "dsp": m["single_dsp"]
+                if int(m["n_dsps"]) == 1 and not m["has_unmapped"]
+                else None,
             }
             for m in mapping
         },

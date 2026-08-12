@@ -9,11 +9,18 @@
 --
 -- Counting DSPs (rather than trusting connection_type) is deliberate: e.g. the
 -- AppNexus pipe carries a Direct Xandr seat AND a reseller marketplace.
+--
+-- has_unmapped closes a hole in that count: COUNT(DISTINCT ...) skips NULLs, so
+-- a channel carrying one named DSP plus unattributed traffic counts as 1 and
+-- would read as a clean 1:1 pipe. It is not — attributing the whole pipe's
+-- requests to that one DSP (and its brands) would overstate it. The caller
+-- requires n_dsps = 1 AND NOT has_unmapped before treating a pipe as 1:1.
 SELECT
     channel_id,
     MAX(connection_type)           AS connection_type,
     COUNT(DISTINCT dsp_group_name) AS n_dsps,
-    MAX(dsp_group_name)            AS single_dsp
+    MAX(dsp_group_name)            AS single_dsp,
+    COUNT_IF(dsp_group_name IS NULL) > 0 AS has_unmapped
 FROM st_datalakehouse.analytics.etl_ssp_responses_daily_enriched
 WHERE date BETWEEN DATE '{start_date}' AND DATE '{end_date}'
   AND channel_id IS NOT NULL

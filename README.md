@@ -11,12 +11,24 @@ connections, and which brands those DSPs actually bid.
    country; expanding a row shows its top editorial groups. «SSPs →» moves right.
 2. **SSP pipes** — the same funnel per channel inside the selected country (or
    editorial group). A pipe that carried exactly one DSP over the window
-   (Direct or BidSwitch) is displayed as that DSP: its requests ARE the DSP's
-   requests. Reseller pools are terminal — the fan-out to individual DSPs
-   happens inside the reseller's exchange and is not observable from Seedtag
-   data. «Brands →» moves right on 1:1 pipes.
+   (Direct or BidSwitch) **and no unattributable traffic** is displayed as that
+   DSP: its requests ARE the DSP's requests. Reseller pools are terminal — the
+   fan-out to individual DSPs happens inside the reseller's exchange and is not
+   observable from Seedtag data. So are pipes labelled `1 DSP + unmapped`: one
+   named seat plus traffic the demand table cannot attribute, where naming the
+   whole pipe after that seat would overstate it. «Brands →» moves right only on
+   true 1:1 pipes.
 3. **Brands (adomains)** — top advertiser domains that DSP bid, with bids,
    impressions and gross revenue (USD).
+
+**Money columns are operational, not Finance.** Revenue is Seedtag revenue from
+the event stream (USD). **Pub cost is an SSP-side allocation estimate** —
+impression cost + HB net insert cost — and Margin derives from it. True
+publisher payout is defined per publisher, from publisher reports, and never per
+user country; splitting it by the country of the user who saw the ad is
+inherently a proxy. Read Pub cost and Margin as directional, and never
+reconcile them against Finance's Publisher Revenue (publisher-reported, EUR,
+monthly-average FX, publisher grain only).
 
 **The 'Others' caveat.** The demand table
 (`analytics.etl_ssp_responses_daily_enriched`) buckets `user_country` into 19
@@ -42,6 +54,19 @@ A user country is inactive when, over the window:
 Editorial-group detail shows the **top 15** groups per country with at least
 **100 K** requests.
 
+**Beachfront is excluded from every supply scan** (`source_type` and
+`channel_id` both `IS DISTINCT FROM 'Beachfront'`). Beachfront is CTV supply
+sharing the same events table, and it is large: ~43.7 B requests on 2026-08-05
+alone, with near-zero web bids. Leaving it in inflated per-country request
+volume and dragged bid rate down, pushing countries under the threshold on CTV
+volume rather than on genuine web inactivity. The demand table already excludes
+it, so including it on the supply side compared two different perimeters. Some
+countries legitimately drop off the list as a result.
+
+The geo filter also requires `length(user_country) = 2` — alongside `''`,
+`'undefined'` and `NULL`, this column has carried corrupted binary values in
+production.
+
 The page footer prints live bid rates for US, FR, ES, GB and DE over the same
 window, so the threshold can always be read against real reference points
 rather than numbers that were true on the day the page was written. All four
@@ -57,7 +82,8 @@ scripts/trino_client.py       Trino connection (shared Seedtag pattern, unmodifi
 sql/inactive_countries.sql    phase 1: the inactive-country list (cheap, one grain)
 sql/country_drill.sql         phase 2: EG + country x SSP + EG x SSP in ONE scan,
                               filtered to the phase-1 countries
-sql/channel_mapping.sql       phase 3a: channel -> DSP identity (1:1 vs reseller pool)
+sql/channel_mapping.sql       phase 3a: channel -> DSP identity
+                              (1:1 vs reseller pool vs partly-unmapped)
 sql/adomain_detail.sql        phase 3b: top brands per demand scope x channel
 sql/benchmarks.sql            bid rate for reference markets
 template/dashboard.html       page body with __PLACEHOLDER__ slots

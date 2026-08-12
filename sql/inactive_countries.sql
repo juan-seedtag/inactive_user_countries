@@ -17,16 +17,30 @@ WITH country AS (
         SUM(COALESCE(seedtag_revenue,
             (ssp_net_imp_paid - COALESCE(ssp_post_auction_discount_amount, 0)
              + COALESCE(curator_margin, 0)) / 1000))    AS revenue_usd,
-        -- Publisher payout (operational proxy, USD, raw x1000). Do NOT add
-        -- ssp_insertion_cost: same underlying field on the HB insertion event,
-        -- summing both double-counts the HB path.
-        SUM(ssp_impression_cost) / 1000                 AS publisher_cost_usd
+        -- Publisher cost: an operational SSP-side ESTIMATE in USD (impression
+        -- cost + HB net insert cost). Both paths compensate publishers and the
+        -- supply funnel books them as separate lines, so both belong here.
+        -- True payout is only ever defined per publisher, from publisher
+        -- reports — never per user country. Splitting it by the country of the
+        -- user who saw the ad is inherently an allocation proxy, so treat this
+        -- as directional and never reconcile it against Finance.
+        SUM(ssp_impression_cost + COALESCE(ssp_hb_net_insert_cost, 0)) / 1000
+                                                        AS publisher_cost_usd
     FROM st_datalakehouse.ad_exchange.ssp_events_daily_simplified
     WHERE date BETWEEN DATE '{start_date}' AND DATE '{end_date}'
-      -- Drop unresolvable geo: empty string, the literal 'undefined', and NULL
-      -- all appear in this column and are not real countries.
+      -- Beachfront is CTV supply riding the same events table. It carries huge
+      -- request volume with near-zero web bids, which both inflates per-country
+      -- volume and drags bid rate under the threshold. The demand table already
+      -- excludes it, so leaving it in here would measure two different
+      -- perimeters against each other. IS DISTINCT FROM (not !=) keeps NULLs.
+      AND source_type IS DISTINCT FROM 'Beachfront'
+      AND channel_id  IS DISTINCT FROM 'Beachfront'
+      -- Drop unresolvable geo: empty string, the literal 'undefined', NULL, and
+      -- corrupted non-country values (binary garbage has been observed in this
+      -- column) all appear here and are not real countries.
       AND user_country IS NOT NULL
       AND user_country NOT IN ('', 'undefined')
+      AND length(user_country) = 2
     GROUP BY user_country
     HAVING SUM(ssp_requests) >= {request_floor}
        AND SUM(ssp_bids) * 1.0 / SUM(ssp_requests) < {bid_rate_threshold}

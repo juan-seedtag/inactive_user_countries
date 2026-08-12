@@ -10,5 +10,9 @@ SELECT
 FROM st_datalakehouse.ad_exchange.ssp_events_daily_simplified
 WHERE date BETWEEN DATE '{start_date}' AND DATE '{end_date}'
   AND user_country IN ({benchmark_countries})
+  -- Same perimeter as the inactive-country scan, otherwise the reference bid
+  -- rates are not comparable to the numbers they are meant to calibrate.
+  AND source_type IS DISTINCT FROM 'Beachfront'
+  AND channel_id  IS DISTINCT FROM 'Beachfront'
 GROUP BY user_country
 ORDER BY bid_rate DESC

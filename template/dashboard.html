@@ -99,7 +99,7 @@ section[hidden]{display:none;}
 <thead><tr><th>Demand entity</th><th>Connection</th><th>Requests</th><th>Bids</th><th>Bid rate</th><th>Wins</th><th>Impressions</th><th>Revenue</th><th>Pub cost</th><th>Margin</th><th>Brands</th></tr></thead>
 <tbody id="ch-tb"></tbody>
 </table></div>
-<p class="foot">SSP pipes with ≥__CHANNEL_FLOOR_LABEL__ requests in this scope (top __CHANNEL_TOP_N__ by volume). A pipe carrying exactly one DSP over the window (Direct or BidSwitch) is shown as that DSP and can drill into brands. Reseller pools fan requests out inside the reseller's exchange — that step is not observable from Seedtag data, so the SSP is the last level.</p>
+<p class="foot">SSP pipes with ≥__CHANNEL_FLOOR_LABEL__ requests in this scope (top __CHANNEL_TOP_N__ by volume). A pipe carrying exactly one DSP over the window (Direct or BidSwitch), with no unattributed traffic, is shown as that DSP and can drill into brands. Reseller pools fan requests out inside the reseller's exchange — that step is not observable from Seedtag data, so the SSP is the last level. Pipes marked <b>1 DSP + unmapped</b> carry one named seat alongside traffic the demand table cannot attribute; naming the whole pipe after that seat would overstate it, so they stop here too.</p>
 </section>
 
 <section id="view-adomains" hidden>
@@ -112,7 +112,7 @@ section[hidden]{display:none;}
 </section>
 
 <p class="foot">Source: SSP events daily — all products, user-country grain, __WINDOW_LABEL__. Inactivity definition: bid rate &lt; __THRESHOLD_PCT__ with ≥__FLOOR_LABEL__ requests over the window. Editorial-group detail: top __TOP_N__ per country, ≥__DETAIL_FLOOR_LABEL__ requests. Demand drill: SSP pipes from the same events table; DSP identity and brands from the enriched demand responses table (Beachfront excluded). Reference points (active markets, same window): __BENCHMARKS__.</p>
-<p class="foot">Money columns are <b>operational figures in USD from the event stream</b>: Revenue = Seedtag revenue (net paid − post-auction discounts + curator margin); Pub cost = the publisher cost price recorded on impression events; Margin = (Revenue − Pub cost) / Revenue. These are the only revenue/cost figures that exist at user-country grain — they do <b>not</b> reconcile with Finance's Publisher Revenue (publisher-reported, EUR, monthly-average FX, publisher grain only). The Brands view shows revenue from the enriched demand table, a slightly different adjustment basis.</p>
+<p class="foot">Money columns are <b>operational figures in USD from the event stream</b>: Revenue = Seedtag revenue (net paid − post-auction discounts + curator margin); Pub cost = an <b>SSP-side allocation estimate</b> (impression cost + HB net insert cost); Margin = (Revenue − Pub cost) / Revenue. These are the only revenue/cost figures that exist at user-country grain — they do <b>not</b> reconcile with Finance's Publisher Revenue (publisher-reported, EUR, monthly-average FX, publisher grain only). True publisher payout is defined per publisher, never per user country, so splitting it by the viewer's country is a proxy: read Pub cost and Margin as directional only. The Brands view shows revenue from the enriched demand table, a slightly different adjustment basis.</p>
 <p class="foot">Last refreshed __GENERATED_AT__ · rebuilt daily from Trino by GitHub Actions.</p>
 </div>
 <script>
@@ -255,9 +255,16 @@ document.getElementById("expall").addEventListener("click", ()=>{
 // --- View 2: SSP pipes / DSPs inside one country (or one EG) ----------------
 function chEntity(ch){
   const m = DATA.chmap ? DATA.chmap[ch] : null;
-  if (m && m.n===1 && m.dsp) return {name:m.dsp, pipe:ch, oneToOne:true, ct:m.ct||"1:1"};
-  if (m && m.n>1) return {name:ch, pipe:ch, oneToOne:false, ct:"Reseller pool ("+m.n+" DSPs)"};
-  return {name:ch, pipe:ch, oneToOne:false, ct:"No demand rows"};
+  if (!m) return {name:ch, pipe:ch, oneToOne:false, ct:"No demand rows"};
+  // 1:1 only when one named DSP carried the pipe with nothing unattributed.
+  // The builder already nulls `dsp` otherwise; this mirrors it, not trusts it.
+  if (m.n===1 && m.dsp && !m.u) return {name:m.dsp, pipe:ch, oneToOne:true, ct:m.ct||"1:1"};
+  if (m.n>1) return {name:ch, pipe:ch, oneToOne:false,
+                     ct:"Reseller pool ("+m.n+" DSPs"+(m.u?" + unmapped":"")+")"};
+  // Demand rows exist but are not fully attributable — do NOT call this a 1:1
+  // pipe or offer a brand drill; the brands would only cover part of the pipe.
+  if (m.n===1) return {name:ch, pipe:ch, oneToOne:false, ct:"1 DSP + unmapped"};
+  return {name:ch, pipe:ch, oneToOne:false, ct:"Unmapped demand"};
 }
 function renderChannels(){
   const key = state.g==null ? state.c : state.c+"|"+state.g;

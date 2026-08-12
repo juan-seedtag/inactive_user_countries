@@ -15,16 +15,22 @@ WITH base AS (
         SUM(ssp_bids)        AS bids,
         SUM(ssp_wins)        AS wins,
         SUM(ssp_impressions) AS impressions,
-        -- Seedtag operational revenue (USD) and publisher payout proxy (USD).
-        -- Same definitions as inactive_countries.sql; insertion_cost is
-        -- deliberately excluded (would double-count the HB path).
+        -- Seedtag operational revenue (USD) and the publisher-cost estimate
+        -- (USD). Same definitions as inactive_countries.sql: publisher cost is
+        -- impression cost + HB net insert cost, an SSP-side allocation proxy —
+        -- true payout exists only per publisher, never per user country.
         SUM(COALESCE(seedtag_revenue,
             (ssp_net_imp_paid - COALESCE(ssp_post_auction_discount_amount, 0)
              + COALESCE(curator_margin, 0)) / 1000))    AS revenue_usd,
-        SUM(ssp_impression_cost) / 1000                 AS publisher_cost_usd
+        SUM(ssp_impression_cost + COALESCE(ssp_hb_net_insert_cost, 0)) / 1000
+                                                        AS publisher_cost_usd
     FROM st_datalakehouse.ad_exchange.ssp_events_daily_simplified
     WHERE date BETWEEN DATE '{start_date}' AND DATE '{end_date}'
       AND user_country IN ({country_list})
+      -- Must match phase 1's perimeter exactly, or the drill totals will not
+      -- add up to the country row they came from. See inactive_countries.sql.
+      AND source_type IS DISTINCT FROM 'Beachfront'
+      AND channel_id  IS DISTINCT FROM 'Beachfront'
     GROUP BY user_country, editorial_group_name, channel_id
 ),
 eg AS (
