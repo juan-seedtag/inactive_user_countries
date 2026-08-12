@@ -58,22 +58,61 @@ tr.detail td:first-child{padding-left:2.4rem;color:var(--ink);}
 button.tgl{background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:.35rem .8rem;font:inherit;font-size:.82rem;cursor:pointer;}
 button.tgl:hover{background:var(--row-hover);}
 button.tgl:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+button.drill{background:none;border:1px solid var(--line);color:var(--accent);border-radius:5px;padding:.1rem .55rem;font:inherit;font-size:.78rem;font-weight:600;cursor:pointer;white-space:nowrap;}
+button.drill:hover{background:var(--row-hover);border-color:var(--accent);}
+button.drill:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+.crumbs{display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;margin:0 0 1rem;font-size:.88rem;}
+.crumbs button{background:none;border:none;color:var(--accent);font:inherit;cursor:pointer;padding:.15rem .25rem;border-radius:4px;}
+.crumbs button:hover{background:var(--row-hover);text-decoration:underline;}
+.crumbs .sep{color:var(--muted);}
+.crumbs .here{font-weight:700;}
+.badge{display:inline-block;font-size:.7rem;font-weight:600;padding:.08rem .45rem;border-radius:4px;border:1px solid var(--line);color:var(--muted);}
+.badge.direct{color:var(--accent);border-color:var(--accent);}
+.badge.pool{color:var(--warn);border-color:var(--warn);}
+.note{background:var(--warn-bg);color:var(--warn);border:1px solid var(--line);border-radius:6px;padding:.55rem .8rem;font-size:.82rem;margin:0 0 .9rem;}
+.note.ok{background:var(--detail-bg);color:var(--muted);}
+.empty{color:var(--muted);font-style:italic;padding:1.2rem;text-align:center;}
+section[hidden]{display:none;}
 </style>
 <div class="wrap">
 <h1>Inactive user countries — SSP supply health</h1>
 <p class="sub">User countries with a bid rate below __THRESHOLD_PCT__, sorted by request volume · __WINDOW_LABEL__ (last __WINDOW_DAYS__ closed days) · countries with ≥__FLOOR_LABEL__ requests</p>
+<nav class="crumbs" id="crumbs" hidden aria-label="Drill path"></nav>
+
+<section id="view-supply">
 <div class="stats">
   <div class="stat"><div class="k">Inactive countries</div><div class="v" id="s-c"></div></div>
   <div class="stat"><div class="k">Unmonetized requests</div><div class="v dead" id="s-r"></div></div>
   <div class="stat"><div class="k">Bids</div><div class="v" id="s-b"></div></div>
   <div class="stat"><div class="k">Impressions</div><div class="v" id="s-i"></div></div>
 </div>
-<div class="ctrl"><button class="tgl" id="expall">Expand all</button><span class="foot" style="margin:0">Click a country to see its editorial groups (top __TOP_N__ by volume, ≥__DETAIL_FLOOR_LABEL__ requests)</span></div>
+<div class="ctrl"><button class="tgl" id="expall">Expand all</button><span class="foot" style="margin:0">Click a country to see its editorial groups (top __TOP_N__ by volume, ≥__DETAIL_FLOOR_LABEL__ requests) · «SSPs →» drills into the demand side</span></div>
 <div class="tblwrap"><table>
-<thead><tr><th>User country</th><th>Requests</th><th>Bids</th><th>Wins</th><th>Impressions</th><th>Bid rate</th><th>Win rate</th><th>Fill rate</th><th>Status</th></tr></thead>
+<thead><tr><th>User country</th><th>Requests</th><th>Bids</th><th>Wins</th><th>Impressions</th><th>Revenue</th><th>Pub cost</th><th>Margin</th><th>Bid rate</th><th>Win rate</th><th>Fill rate</th><th>Status</th><th>Demand</th></tr></thead>
 <tbody id="tb"></tbody>
 </table></div>
-<p class="foot">Source: SSP events daily — all products, user-country grain, __WINDOW_LABEL__. Inactivity definition: bid rate &lt; __THRESHOLD_PCT__ with ≥__FLOOR_LABEL__ requests over the window. Editorial-group detail: top __TOP_N__ per country, ≥__DETAIL_FLOOR_LABEL__ requests. Reference points (active markets, same window): __BENCHMARKS__.</p>
+</section>
+
+<section id="view-channels" hidden>
+<div class="note ok" id="ch-context"></div>
+<div class="tblwrap"><table>
+<thead><tr><th>Demand entity</th><th>Connection</th><th>Requests</th><th>Bids</th><th>Bid rate</th><th>Wins</th><th>Impressions</th><th>Revenue</th><th>Pub cost</th><th>Margin</th><th>Brands</th></tr></thead>
+<tbody id="ch-tb"></tbody>
+</table></div>
+<p class="foot">SSP pipes with ≥__CHANNEL_FLOOR_LABEL__ requests in this scope (top __CHANNEL_TOP_N__ by volume). A pipe carrying exactly one DSP over the window (Direct or BidSwitch) is shown as that DSP and can drill into brands. Reseller pools fan requests out inside the reseller's exchange — that step is not observable from Seedtag data, so the SSP is the last level.</p>
+</section>
+
+<section id="view-adomains" hidden>
+<div class="note" id="ad-scope"></div>
+<div class="tblwrap"><table>
+<thead><tr><th>Brand (adomain)</th><th>Bids</th><th>Impressions</th><th>Gross revenue (USD)</th></tr></thead>
+<tbody id="ad-tb"></tbody>
+</table></div>
+<p class="foot">Top __ADOMAIN_TOP_N__ advertiser domains by bids for this DSP in this demand scope, same window. Only bids that actually happened appear — a brand not bidding leaves no trace.</p>
+</section>
+
+<p class="foot">Source: SSP events daily — all products, user-country grain, __WINDOW_LABEL__. Inactivity definition: bid rate &lt; __THRESHOLD_PCT__ with ≥__FLOOR_LABEL__ requests over the window. Editorial-group detail: top __TOP_N__ per country, ≥__DETAIL_FLOOR_LABEL__ requests. Demand drill: SSP pipes from the same events table; DSP identity and brands from the enriched demand responses table (Beachfront excluded). Reference points (active markets, same window): __BENCHMARKS__.</p>
+<p class="foot">Money columns are <b>operational figures in USD from the event stream</b>: Revenue = Seedtag revenue (net paid − post-auction discounts + curator margin); Pub cost = the publisher cost price recorded on impression events; Margin = (Revenue − Pub cost) / Revenue. These are the only revenue/cost figures that exist at user-country grain — they do <b>not</b> reconcile with Finance's Publisher Revenue (publisher-reported, EUR, monthly-average FX, publisher grain only). The Brands view shows revenue from the enriched demand table, a slightly different adjustment basis.</p>
 <p class="foot">Last refreshed __GENERATED_AT__ · rebuilt daily from Trino by GitHub Actions.</p>
 </div>
 <script>
@@ -81,22 +120,94 @@ const DATA = __PAYLOAD__;
 const NAMES = {VE:"Venezuela",BF:"Burkina Faso",CN:"China",BJ:"Benin",IQ:"Iraq",FO:"Faroe Islands",NI:"Nicaragua",TD:"Chad",LB:"Lebanon",SL:"Sierra Leone",BY:"Belarus",AF:"Afghanistan",SD:"Sudan",MM:"Myanmar",ZW:"Zimbabwe",GH:"Ghana",MW:"Malawi",NA:"Namibia",CU:"Cuba",SY:"Syria",IR:"Iran",KP:"North Korea",ML:"Mali",NE:"Niger",GN:"Guinea",TG:"Togo",HT:"Haiti",YE:"Yemen",LY:"Libya",SO:"Somalia",ER:"Eritrea",TJ:"Tajikistan",TM:"Turkmenistan",GW:"Guinea-Bissau",CF:"Central African Rep.",CD:"DR Congo",CG:"Congo",BI:"Burundi",MR:"Mauritania",LR:"Liberia",GM:"Gambia",SS:"South Sudan",DJ:"Djibouti",KM:"Comoros",ET:"Ethiopia",RW:"Rwanda",MG:"Madagascar",MZ:"Mozambique",AO:"Angola",ZM:"Zambia",UG:"Uganda",TZ:"Tanzania",PG:"Papua New Guinea",LA:"Laos",KH:"Cambodia",BT:"Bhutan",MV:"Maldives",FJ:"Fiji",VU:"Vanuatu",WS:"Samoa",TO:"Tonga",SB:"Solomon Islands",TL:"Timor-Leste",SR:"Suriname",GY:"Guyana",BO:"Bolivia",PY:"Paraguay",HN:"Honduras",GT:"Guatemala",SV:"El Salvador",MX:"Mexico",RU:"Russia",UA:"Ukraine",MD:"Moldova",AM:"Armenia",AZ:"Azerbaijan",GE:"Georgia",UZ:"Uzbekistan",KG:"Kyrgyzstan",KZ:"Kazakhstan",MN:"Mongolia",NP:"Nepal",BD:"Bangladesh",LK:"Sri Lanka",PK:"Pakistan",DZ:"Algeria",MA:"Morocco",TN:"Tunisia",EG:"Egypt",JO:"Jordan",PS:"Palestine",OM:"Oman",KW:"Kuwait",BH:"Bahrain",QA:"Qatar",SA:"Saudi Arabia",AE:"UAE",IL:"Israel",TR:"Türkiye",CI:"Côte d’Ivoire",SN:"Senegal",CM:"Cameroon",GA:"Gabon",GQ:"Eq. Guinea",ST:"São Tomé",CV:"Cabo Verde",BW:"Botswana",LS:"Lesotho",SZ:"Eswatini",AL:"Albania",MK:"North Macedonia",BA:"Bosnia",RS:"Serbia",ME:"Montenegro",XK:"Kosovo",PH:"Philippines",TH:"Thailand",IN:"India",ID:"Indonesia",MY:"Malaysia",VN:"Vietnam",KR:"South Korea",TW:"Taiwan",JP:"Japan",HK:"Hong Kong",SG:"Singapore",NG:"Nigeria",KE:"Kenya",ZA:"South Africa",EG:"Egypt",US:"United States",CA:"Canada",FR:"France",DE:"Germany",ES:"Spain",IT:"Italy",GB:"United Kingdom",NL:"Netherlands",BE:"Belgium",PT:"Portugal",BR:"Brazil",AR:"Argentina",CL:"Chile",CO:"Colombia",PE:"Peru",EC:"Ecuador",UY:"Uruguay",AU:"Australia",NZ:"New Zealand",AQ:"Antarctica",KI:"Kiribati",PW:"Palau",TK:"Tokelau",TV:"Tuvalu",VC:"St. Vincent",NC:"New Caledonia",PM:"St. Pierre & Miquelon",NU:"Niue",GU:"Guam",BL:"St. Barthélemy",AW:"Aruba",IM:"Isle of Man",WF:"Wallis & Futuna",RE:"Réunion",MO:"Macao",PF:"Fr. Polynesia",TT:"Trinidad & Tobago",BM:"Bermuda",GG:"Guernsey",JE:"Jersey",MP:"N. Mariana Is.",AX:"Åland",MU:"Mauritius",DM:"Dominica",LC:"St. Lucia",AI:"Anguilla",GL:"Greenland",TC:"Turks & Caicos",FM:"Micronesia",BZ:"Belize",CK:"Cook Islands",NR:"Nauru",SJ:"Svalbard",GD:"Grenada",SX:"Sint Maarten",IS:"Iceland",BN:"Brunei",MF:"St. Martin",MS:"Montserrat",MQ:"Martinique",MH:"Marshall Is.",MT:"Malta",GF:"Fr. Guiana",MC:"Monaco",AG:"Antigua",BB:"Barbados",AD:"Andorra",VG:"Br. Virgin Is.",KN:"St. Kitts",BD:"Bangladesh",BS:"Bahamas",GP:"Guadeloupe",KY:"Cayman Is.",YT:"Mayotte",CW:"Curaçao",SC:"Seychelles",AS:"Am. Samoa",GI:"Gibraltar",FK:"Falkland Is.",DO:"Dominican Rep.",BQ:"Bonaire",VI:"US Virgin Is.",CY:"Cyprus",GR:"Greece",LT:"Lithuania",PR:"Puerto Rico",SM:"San Marino",VA:"Vatican",EE:"Estonia",JM:"Jamaica",IO:"Br. Indian Ocean Terr.",UM:"US Minor Is.",SH:"St. Helena",PN:"Pitcairn",GS:"S. Georgia",EH:"W. Sahara",NF:"Norfolk Is.",CC:"Cocos Is.",LI:"Liechtenstein",LU:"Luxembourg",MQ:"Martinique",HR:"Croatia",BG:"Bulgaria",RO:"Romania",HU:"Hungary",CZ:"Czechia",SK:"Slovakia",SI:"Slovenia",AT:"Austria",CH:"Switzerland",DK:"Denmark",SE:"Sweden",NO:"Norway",FI:"Finland",IE:"Ireland",LV:"Latvia",QA:"Qatar",PA:"Panama",CR:"Costa Rica"};
 const fmt = n => n>=1e9 ? (n/1e9).toFixed(2)+"B" : n>=1e6 ? (n/1e6).toFixed(1)+"M" : n>=1e3 ? (n/1e3).toFixed(1)+"K" : String(n);
 const pct = v => v==null ? "–" : (v*100).toFixed(v*100<0.01?4:3)+"%";
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+// Inactive countries earn dollars, not millions — keep small values readable.
+const money = v => v==null ? "–" :
+  "$"+(v>=1000 ? Math.round(v).toLocaleString("en-US") : v>=100 ? v.toFixed(0) : v.toFixed(2));
+// Margin % from revenue/publisher-cost; red when the traffic loses money.
+function marginCell(rv, pc){
+  if (rv==null || pc==null || rv===0) return "–";
+  const m = (rv-pc)/rv;
+  const txt = (m*100).toFixed(1)+"%";
+  return m<0 ? `<span class="pill dead">${txt}</span>` : txt;
+}
+
+// --- Indices ---------------------------------------------------------------
 const byC = {};
 DATA.details.forEach(d=>{(byC[d.c]=byC[d.c]||[]).push(d);});
 Object.values(byC).forEach(a=>a.sort((x,y)=>y.rq-x.rq));
-const tb = document.getElementById("tb");
-const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+// Drill data is absent when re-rendering from a cache written before the
+// demand drill existed — the landing table must still work.
+const HAS_DRILL = Array.isArray(DATA.channels) && DATA.chmap;
+const chIdx = {};   // "C" or "C|EG" -> channel rows
+if (HAS_DRILL) DATA.channels.forEach(r=>{
+  const k = r.g==null ? r.c : r.c+"|"+r.g;
+  (chIdx[k]=chIdx[k]||[]).push(r);
+});
+const adIdx = {};   // "scope|channel" -> adomain rows
+if (HAS_DRILL && Array.isArray(DATA.adomains)) DATA.adomains.forEach(r=>{
+  (adIdx[r.s+"|"+r.ch]=adIdx[r.s+"|"+r.ch]||[]).push(r);
+});
+const KEY_MARKETS = (DATA.meta.key_markets)||[];
+const scopeOf = c => KEY_MARKETS.includes(c) ? c : "Others";
+const cname = c => NAMES[c] ? `${c} — ${NAMES[c]}` : c;
+
+// --- Navigation ------------------------------------------------------------
+// state: {view:'supply'} | {view:'channels',c,g} | {view:'adomains',c,g,ch,dsp}
+let state = {view:"supply"};
+const $ = id => document.getElementById(id);
+function show(state_){
+  state = state_;
+  $("view-supply").hidden   = state.view!=="supply";
+  $("view-channels").hidden = state.view!=="channels";
+  $("view-adomains").hidden = state.view!=="adomains";
+  renderCrumbs();
+  if (state.view==="channels") renderChannels();
+  if (state.view==="adomains") renderAdomains();
+  window.scrollTo({top:0});
+}
+function renderCrumbs(){
+  const nav = $("crumbs");
+  if (state.view==="supply"){ nav.hidden = true; return; }
+  nav.hidden = false; nav.innerHTML = "";
+  const put = (label, target) => {
+    if (target){
+      const b = document.createElement("button");
+      b.textContent = label; b.addEventListener("click", ()=>show(target));
+      nav.appendChild(b);
+    } else {
+      const s = document.createElement("span");
+      s.className = "here"; s.textContent = label; nav.appendChild(s);
+    }
+    return nav;
+  };
+  const sep = () => { const s=document.createElement("span"); s.className="sep"; s.textContent="›"; nav.appendChild(s); };
+  put("‹ All countries", {view:"supply"}); sep();
+  const scopeLabel = cname(state.c) + (state.g!==undefined && state.g!==null ? " / "+state.g : "");
+  if (state.view==="channels"){ put(scopeLabel, null); }
+  else { put(scopeLabel, {view:"channels", c:state.c, g:state.g}); sep(); put(state.dsp, null); }
+}
+
+// --- View 1: supply (countries + editorial groups) --------------------------
+const tb = $("tb");
 let allOpen = false;
+function drillBtn(label, onClick){
+  const b = document.createElement("button");
+  b.className = "drill"; b.textContent = label;
+  b.addEventListener("click", e=>{ e.stopPropagation(); onClick(); });
+  return b;
+}
 function render(){
   // Thresholds come from the payload so the page can never drift from the SQL
   // that produced it. Rows are already filtered server-side; this is a guard.
   const thr = DATA.meta.bid_rate_threshold;
   const floor = DATA.meta.request_floor;
   const cs = DATA.countries.filter(c=>c.br!=null && c.br<thr && c.rq>=floor && c.c).sort((a,b)=>b.rq-a.rq);
-  document.getElementById("s-c").textContent = cs.length;
-  document.getElementById("s-r").textContent = fmt(cs.reduce((s,c)=>s+c.rq,0));
-  document.getElementById("s-b").textContent = fmt(cs.reduce((s,c)=>s+c.b,0));
-  document.getElementById("s-i").textContent = fmt(cs.reduce((s,c)=>s+c.i,0));
+  $("s-c").textContent = cs.length;
+  $("s-r").textContent = fmt(cs.reduce((s,c)=>s+c.rq,0));
+  $("s-b").textContent = fmt(cs.reduce((s,c)=>s+c.b,0));
+  $("s-i").textContent = fmt(cs.reduce((s,c)=>s+c.i,0));
   tb.innerHTML = "";
   cs.forEach(c=>{
     const tr = document.createElement("tr");
@@ -105,14 +216,22 @@ function render(){
     const status = c.b===0 ? '<span class="pill dead">No bids</span>' : c.br<0.001 ? '<span class="pill dead">Near zero</span>' : '<span class="pill low">Very low</span>';
     tr.innerHTML = `<td><span class="chev">▸</span><span class="cc">${esc(c.c)}</span><span class="cname">${NAMES[c.c]||""}</span></td>
       <td>${fmt(c.rq)}</td><td>${fmt(c.b)}</td><td>${fmt(c.w)}</td><td>${fmt(c.i)}</td>
+      <td>${money(c.rv)}</td><td>${money(c.pc)}</td><td>${marginCell(c.rv,c.pc)}</td>
       <td>${pct(c.br)}</td><td>${pct(c.wr)}</td><td>${pct(c.fr)}</td><td>${status}</td>`;
+    const act = document.createElement("td");
+    if (HAS_DRILL && chIdx[c.c]) act.appendChild(drillBtn("SSPs →", ()=>show({view:"channels", c:c.c, g:null})));
+    tr.appendChild(act);
     tb.appendChild(tr);
     const kids = (byC[c.c]||[]).map(d=>{
       const dr = document.createElement("tr");
       dr.className = "detail"; dr.style.display = "none";
       dr.innerHTML = `<td>${esc(d.g||"(unknown)")}</td>
         <td>${fmt(d.rq)}</td><td>${fmt(d.b)}</td><td>${fmt(d.w)}</td><td>${fmt(d.i)}</td>
+        <td>${money(d.rv)}</td><td>${money(d.pc)}</td><td>${marginCell(d.rv,d.pc)}</td>
         <td>${pct(d.br)}</td><td>${pct(d.wr)}</td><td>${pct(d.fr)}</td><td></td>`;
+      const dact = document.createElement("td");
+      if (HAS_DRILL && chIdx[d.c+"|"+d.g]) dact.appendChild(drillBtn("SSPs →", ()=>show({view:"channels", c:d.c, g:d.g})));
+      dr.appendChild(dact);
       tb.appendChild(dr);
       return dr;
     });
@@ -131,6 +250,79 @@ document.getElementById("expall").addEventListener("click", ()=>{
   allOpen = !allOpen;
   document.getElementById("expall").textContent = allOpen ? "Collapse all" : "Expand all";
   render();
+});
+
+// --- View 2: SSP pipes / DSPs inside one country (or one EG) ----------------
+function chEntity(ch){
+  const m = DATA.chmap ? DATA.chmap[ch] : null;
+  if (m && m.n===1 && m.dsp) return {name:m.dsp, pipe:ch, oneToOne:true, ct:m.ct||"1:1"};
+  if (m && m.n>1) return {name:ch, pipe:ch, oneToOne:false, ct:"Reseller pool ("+m.n+" DSPs)"};
+  return {name:ch, pipe:ch, oneToOne:false, ct:"No demand rows"};
+}
+function renderChannels(){
+  const key = state.g==null ? state.c : state.c+"|"+state.g;
+  const rows = (chIdx[key]||[]).slice().sort((a,b)=>b.rq-a.rq);
+  const scopeTxt = state.g!=null ? `${esc(state.g)} in ${esc(cname(state.c))}` : esc(cname(state.c));
+  $("ch-context").innerHTML = `Supply → demand funnel per SSP pipe for <b>${scopeTxt}</b>. Pipes shown as a DSP name are 1:1 connections (Direct/BidSwitch) — the requests ARE that DSP's requests. Reseller pools are the last observable level.`;
+  const t = $("ch-tb"); t.innerHTML = "";
+  if (!rows.length){
+    t.innerHTML = `<tr><td colspan="11" class="empty">No SSP pipes above the volume floor for this scope.</td></tr>`;
+    return;
+  }
+  rows.forEach(r=>{
+    const e = chEntity(r.ch);
+    const br = r.rq ? r.b/r.rq : null;
+    const tr = document.createElement("tr");
+    const badge = e.oneToOne
+      ? `<span class="badge direct">${esc(e.ct)}</span>`
+      : `<span class="badge pool">${esc(e.ct)}</span>`;
+    const label = e.oneToOne && e.name!==e.pipe
+      ? `<span class="cc">${esc(e.name)}</span><span class="cname">via ${esc(e.pipe)}</span>`
+      : `<span class="cc">${esc(e.name)}</span>`;
+    tr.innerHTML = `<td>${label}</td><td>${badge}</td>
+      <td>${fmt(r.rq)}</td><td>${fmt(r.b)}</td><td>${pct(br)}</td>
+      <td>${fmt(r.w)}</td><td>${fmt(r.i)}</td>
+      <td>${money(r.rv)}</td><td>${money(r.pc)}</td><td>${marginCell(r.rv,r.pc)}</td>`;
+    const act = document.createElement("td");
+    if (e.oneToOne){
+      act.appendChild(drillBtn("Brands →", ()=>show({view:"adomains", c:state.c, g:state.g, ch:r.ch, dsp:e.name})));
+    } else {
+      const s = document.createElement("span");
+      s.className = "cname"; s.textContent = "last level";
+      act.appendChild(s);
+    }
+    tr.appendChild(act);
+    t.appendChild(tr);
+  });
+}
+
+// --- View 3: brands (adomains) for one 1:1 DSP pipe -------------------------
+function renderAdomains(){
+  const scope = scopeOf(state.c);
+  const exact = scope===state.c;
+  const box = $("ad-scope");
+  box.className = exact ? "note ok" : "note";
+  box.innerHTML = exact
+    ? `Brands bid by <b>${esc(state.dsp)}</b> in <b>${esc(cname(state.c))}</b> — exact: this country is a key market in the demand table.`
+    : `Brands bid by <b>${esc(state.dsp)}</b> in the <b>'Others'</b> demand bucket (all long-tail countries combined) — the demand table does not keep ${esc(cname(state.c))} separate, so this is the closest available proxy. Note the editorial-group filter does not apply here; this is the DSP's long-tail profile.`;
+  const rows = (adIdx[scope+"|"+state.ch]||[]).slice().sort((a,b)=>b.b-a.b);
+  const t = $("ad-tb"); t.innerHTML = "";
+  if (!rows.length){
+    t.innerHTML = `<tr><td colspan="4" class="empty">No bids recorded for this DSP in this demand scope over the window — the demand side is fully silent here.</td></tr>`;
+    return;
+  }
+  rows.forEach(r=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><span class="cc">${esc(r.a)}</span></td>
+      <td>${fmt(r.b)}</td><td>${fmt(r.i)}</td><td>${money(r.rv)}</td>`;
+    t.appendChild(tr);
+  });
+}
+
+document.addEventListener("keydown", e=>{
+  if (e.key!=="Escape") return;
+  if (state.view==="adomains") show({view:"channels", c:state.c, g:state.g});
+  else if (state.view==="channels") show({view:"supply"});
 });
 render();
 </script>

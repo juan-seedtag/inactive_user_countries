@@ -1,7 +1,31 @@
 # Inactive user countries — SSP supply health
 
 Daily dashboard of user countries where demand barely responds to our supply,
-drilled down to the editorial groups inside each country.
+drilled down to the editorial groups inside each country — and from there into
+the demand side: which SSP pipes carry the traffic, which of them are 1:1 DSP
+connections, and which brands those DSPs actually bid.
+
+## The drill (left → right)
+
+1. **Countries + editorial groups** (landing view) — supply funnel per inactive
+   country; expanding a row shows its top editorial groups. «SSPs →» moves right.
+2. **SSP pipes** — the same funnel per channel inside the selected country (or
+   editorial group). A pipe that carried exactly one DSP over the window
+   (Direct or BidSwitch) is displayed as that DSP: its requests ARE the DSP's
+   requests. Reseller pools are terminal — the fan-out to individual DSPs
+   happens inside the reseller's exchange and is not observable from Seedtag
+   data. «Brands →» moves right on 1:1 pipes.
+3. **Brands (adomains)** — top advertiser domains that DSP bid, with bids,
+   impressions and gross revenue (USD).
+
+**The 'Others' caveat.** The demand table
+(`analytics.etl_ssp_responses_daily_enriched`) buckets `user_country` into 19
+key markets + `'Others'` — the bucketing is a hardcoded CASE in the dbt model
+`stg_ssp_responses_hourly.sql`, applied at aggregation time, so long-tail
+detail is unrecoverable. Brand data is exact for inactive countries that are
+key markets (e.g. IN) and an explicitly-labeled long-tail proxy for the rest.
+Adding countries to that CASE (dbt PR; precedent: de_dbt_lakehouse#743) would
+make them exact from the deploy date forward.
 
 `index.html` is regenerated every morning by GitHub Actions and committed back
 to the repo. Open it directly, or serve it with GitHub Pages.
@@ -30,12 +54,22 @@ embedded payload.
 ```
 scripts/update_dashboard.py   query -> render -> index.html
 scripts/trino_client.py       Trino connection (shared Seedtag pattern, unmodified)
-sql/inactive_countries.sql    country + editorial-group grains in one result set
+sql/inactive_countries.sql    phase 1: the inactive-country list (cheap, one grain)
+sql/country_drill.sql         phase 2: EG + country x SSP + EG x SSP in ONE scan,
+                              filtered to the phase-1 countries
+sql/channel_mapping.sql       phase 3a: channel -> DSP identity (1:1 vs reseller pool)
+sql/adomain_detail.sql        phase 3b: top brands per demand scope x channel
 sql/benchmarks.sql            bid rate for reference markets
 template/dashboard.html       page body with __PLACEHOLDER__ slots
 data/latest.json              last successful query result (cached, committed)
 index.html                    generated output (committed)
 ```
+
+The two-phase shape is deliberate: phase 1 pays one country-grain scan to find
+the ~170 inactive countries, and everything heavier is filtered to that list,
+which keeps the group-by/shuffle small. All supply drill grains share a single
+scan (`country_drill.sql` UNION ALL of pre-aggregated CTEs) — never one query
+per grain.
 
 ## Running it locally
 

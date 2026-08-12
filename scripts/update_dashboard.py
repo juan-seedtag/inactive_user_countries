@@ -38,6 +38,20 @@ DETAIL_FLOOR = 100_000         # ignore editorial groups too small to matter
 TOP_N_GROUPS = 15              # editorial groups shown per country
 BENCHMARK_COUNTRIES = ["US", "FR", "ES", "GB", "DE"]
 
+# --- Demand drill (SSP -> DSP -> brand) --------------------------------------
+CHANNEL_FLOOR = 100_000        # min requests for a channel row at country grain
+EG_CHANNEL_FLOOR = 50_000      # min requests for a channel row at EG grain
+CHANNEL_TOP_N = 10             # channels shown per country / per EG
+ADOMAIN_TOP_N = 10             # brands shown per (demand scope, channel)
+# The demand table (etl_ssp_responses_daily_enriched) groups user_country into
+# these key markets; every other country lands in the shared 'Others' bucket.
+# Inactive countries outside this list get brand data from 'Others' as an
+# explicitly-labeled proxy.
+DEMAND_KEY_MARKETS = [
+    "AE", "AR", "AU", "BE", "BR", "CA", "CO", "DE", "ES", "FR",
+    "GB", "IN", "IT", "MX", "NL", "PL", "PT", "US", "ZA",
+]
+
 OUTPUT_HTML = PROJECT_ROOT / "index.html"
 TEMPLATE = PROJECT_ROOT / "template" / "dashboard.html"
 SQL_DIR = PROJECT_ROOT / "sql"
@@ -48,11 +62,29 @@ CACHE = DATA_DIR / "latest.json"
 def window(end_date: date | None, days: int) -> tuple[date, date]:
     """Return the (start, end) window, inclusive.
 
-    Defaults to the last `days` closed days. The daily table is T-1, so the
-    most recent complete day is yesterday; using today would render a partial
-    day as if it were a real drop in activity.
+    Defaults to the last `days` days ending at the newest partition that
+    actually exists in the events table. "T-1" is nominal: the yesterday
+    partition can land at any hour of today, so anchoring to the calendar
+    would silently produce a window whose last day has no data (observed
+    2026-08-11: the Aug 10 partition was still absent at 06:49 UTC and the
+    dashboard claimed a 7-day window that contained 6 days).
     """
-    end = end_date or (datetime.now(timezone.utc).date() - timedelta(days=1))
+    if end_date is None:
+        from trino_client import run_trino_query
+
+        rows = run_trino_query(
+            "SELECT CAST(MAX(date) AS DATE) AS last_day "
+            "FROM st_datalakehouse.ad_exchange.ssp_events_daily_simplified"
+        )
+        end = rows[0]["last_day"]
+        if isinstance(end, str):
+            end = date.fromisoformat(end)
+        yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
+        if end > yesterday:
+            end = yesterday  # never include a live, partial day
+        print(f"Newest complete partition: {end}", flush=True)
+    else:
+        end = end_date
     return end - timedelta(days=days - 1), end
 
 
@@ -71,17 +103,64 @@ def fetch(start: date, end: date) -> dict:
         "end_date": end.isoformat(),
     }
 
+    # Phase 1 — identify inactive countries (cheap output, one grain).
     main_sql = load_sql(
         "inactive_countries.sql",
         bid_rate_threshold=BID_RATE_THRESHOLD,
         request_floor=REQUEST_FLOOR,
-        detail_floor=DETAIL_FLOOR,
-        top_n=TOP_N_GROUPS,
         **common,
     )
-    print(f"Querying {start} .. {end} (threshold {BID_RATE_THRESHOLD:.3%})…", flush=True)
+    print(f"Phase 1: inactive countries {start} .. {end} "
+          f"(threshold {BID_RATE_THRESHOLD:.3%})…", flush=True)
     rows = run_trino_query(main_sql)
-    print(f"  {len(rows)} rows", flush=True)
+    print(f"  {len(rows)} inactive countries", flush=True)
+
+    countries = [slim(r) for r in rows]
+    if not countries:
+        raise SystemExit(
+            "Query returned no inactive countries — refusing to overwrite the "
+            "dashboard with an empty table. Check the date window: the daily "
+            "table retains roughly 36 closed days."
+        )
+    inactive = [c["c"] for c in countries]
+
+    # Phase 2 — the entire supply drill (EG, country x SSP, EG x SSP) in ONE
+    # scan, filtered to the inactive countries from phase 1.
+    drill_sql = load_sql(
+        "country_drill.sql",
+        country_list=", ".join(f"'{c}'" for c in inactive),
+        detail_floor=DETAIL_FLOOR,
+        top_n=TOP_N_GROUPS,
+        channel_floor=CHANNEL_FLOOR,
+        eg_channel_floor=EG_CHANNEL_FLOOR,
+        channel_top_n=CHANNEL_TOP_N,
+        **common,
+    )
+    print("Phase 2: EG + SSP drill inside those countries…", flush=True)
+    drill_rows = run_trino_query(drill_sql)
+    details = [slim(r) for r in drill_rows if r["level"] == "eg"]
+    channel_rows = [r for r in drill_rows if r["level"] != "eg"]
+    print(f"  {len(details)} EG rows, {len(channel_rows)} channel rows", flush=True)
+
+    # Phase 3a — channel -> DSP identity (1:1 pipe vs reseller pool).
+    print("Phase 3: channel -> DSP mapping…", flush=True)
+    mapping = run_trino_query(load_sql("channel_mapping.sql", **common))
+    print(f"  {len(mapping)} channels mapped", flush=True)
+
+    # Phase 3b — brands per demand scope. Exact for inactive countries that are
+    # key markets; 'Others' is the shared proxy for every long-tail country.
+    scopes = sorted(
+        {c if c in DEMAND_KEY_MARKETS else "Others" for c in inactive}
+    )
+    adomain_sql = load_sql(
+        "adomain_detail.sql",
+        demand_scopes=", ".join(f"'{s}'" for s in scopes),
+        adomain_top_n=ADOMAIN_TOP_N,
+        **common,
+    )
+    print(f"  top brands for demand scopes {scopes}…", flush=True)
+    adomain_rows = run_trino_query(adomain_sql)
+    print(f"  {len(adomain_rows)} brand rows", flush=True)
 
     bench_sql = load_sql(
         "benchmarks.sql",
@@ -90,15 +169,6 @@ def fetch(start: date, end: date) -> dict:
     )
     bench = run_trino_query(bench_sql)
     print(f"  {len(bench)} benchmark rows", flush=True)
-
-    countries = [slim(r) for r in rows if r["level"] == "country"]
-    details = [slim(r) for r in rows if r["level"] == "detail"]
-    if not countries:
-        raise SystemExit(
-            "Query returned no inactive countries — refusing to overwrite the "
-            "dashboard with an empty table. Check the date window: the daily "
-            "table retains roughly 36 closed days."
-        )
 
     return {
         "meta": {
@@ -113,9 +183,24 @@ def fetch(start: date, end: date) -> dict:
             "benchmarks": [
                 {"c": b["user_country"], "br": num(b["bid_rate"])} for b in bench
             ],
+            "channel_floor": CHANNEL_FLOOR,
+            "eg_channel_floor": EG_CHANNEL_FLOOR,
+            "channel_top_n": CHANNEL_TOP_N,
+            "adomain_top_n": ADOMAIN_TOP_N,
+            "key_markets": DEMAND_KEY_MARKETS,
         },
         "countries": countries,
         "details": details,
+        "channels": [slim_channel(r) for r in channel_rows],
+        "chmap": {
+            m["channel_id"]: {
+                "ct": m["connection_type"],
+                "n": int(m["n_dsps"]),
+                "dsp": m["single_dsp"] if int(m["n_dsps"]) == 1 else None,
+            }
+            for m in mapping
+        },
+        "adomains": [slim_adomain(r) for r in adomain_rows],
     }
 
 
@@ -125,17 +210,52 @@ def num(v):
 
 
 def slim(r: dict) -> dict:
-    """Short keys — this payload is embedded in the page, so bytes matter."""
+    """Short keys — this payload is embedded in the page, so bytes matter.
+
+    Rates come from the SQL when present (phase 1); drill grains carry raw
+    counts only, so they are derived here.
+    """
+    rq, b = int(r["requests"]), int(r["bids"])
+    w, i = int(r["wins"]), int(r["impressions"])
     return {
         "c": r["user_country"],
         "g": r.get("editorial_group_name"),
+        "rq": rq,
+        "b": b,
+        "w": w,
+        "i": i,
+        "br": num(r["bid_rate"]) if "bid_rate" in r else (b / rq if rq else None),
+        "wr": num(r["win_rate"]) if "win_rate" in r else (w / b if b else None),
+        "fr": num(r["fill_rate"]) if "fill_rate" in r else (i / rq if rq else None),
+        "rv": num(r.get("revenue_usd")),
+        "pc": num(r.get("publisher_cost_usd")),
+    }
+
+
+def slim_channel(r: dict) -> dict:
+    """Channel row: country (+ EG for 'detail' level) x SSP pipe, supply funnel."""
+    return {
+        "c": r["user_country"],
+        "g": r.get("editorial_group_name"),
+        "ch": r["channel_id"],
         "rq": int(r["requests"]),
         "b": int(r["bids"]),
         "w": int(r["wins"]),
         "i": int(r["impressions"]),
-        "br": num(r["bid_rate"]),
-        "wr": num(r["win_rate"]),
-        "fr": num(r["fill_rate"]),
+        "rv": num(r.get("revenue_usd")),
+        "pc": num(r.get("publisher_cost_usd")),
+    }
+
+
+def slim_adomain(r: dict) -> dict:
+    """Brand row: demand scope (key market or 'Others') x channel x adomain."""
+    return {
+        "s": r["user_country"],
+        "ch": r["channel_id"],
+        "a": r["adomain"],
+        "b": int(r["bids"]),
+        "i": int(r["impressions"]),
+        "rv": num(r["revenue_usd"]),
     }
 
 
@@ -171,6 +291,9 @@ def render(payload: dict) -> str:
         "__FLOOR_LABEL__": fmt_count(meta["request_floor"]),
         "__DETAIL_FLOOR_LABEL__": fmt_count(meta["detail_floor"]),
         "__TOP_N__": str(meta["top_n"]),
+        "__CHANNEL_FLOOR_LABEL__": fmt_count(meta.get("channel_floor", CHANNEL_FLOOR)),
+        "__CHANNEL_TOP_N__": str(meta.get("channel_top_n", CHANNEL_TOP_N)),
+        "__ADOMAIN_TOP_N__": str(meta.get("adomain_top_n", ADOMAIN_TOP_N)),
         "__BENCHMARKS__": benchmarks,
         "__GENERATED_AT__": meta["generated_at"],
     }
