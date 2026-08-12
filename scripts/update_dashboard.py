@@ -29,11 +29,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
 # --- Inactivity definition -------------------------------------------------
-# A country is "inactive" when demand barely responds to its supply. Note that
-# 1% sits ABOVE several core markets' bid rates (US ~0.9%, FR ~0.7% on the
-# post-Beachfront perimeter), so those markets will appear on the list — this
-# threshold reads as "below-par demand response", not "no demand at all".
-BID_RATE_THRESHOLD = 0.01
+# A country is "inactive" when demand barely responds to its supply. 0.65% is
+# chosen to sit just under the big healthy-but-diluted markets (US ~0.92%,
+# CA ~0.95%) while still catching genuinely weak demand response (JP ~0.56%,
+# TH ~0.60%, SE ~0.67% hovers at the edge). FR (~0.71%) stays off the list.
+BID_RATE_THRESHOLD = 0.0065
 REQUEST_FLOOR = 1_000_000      # ignore countries too small to read a rate from
 DETAIL_FLOOR = 100_000         # ignore editorial groups too small to matter
 TOP_N_GROUPS = 15              # editorial groups shown per country
