@@ -57,7 +57,7 @@ jobs:
           DAYS: ${{ inputs.days }}
           END_DATE: ${{ inputs.end_date }}
         run: |
-          args=(--days "${DAYS:-7}")
+          args=(--days "${DAYS:-30}")
           if [ -n "$END_DATE" ]; then
             args+=(--end-date "$END_DATE")
           fi

@@ -44,11 +44,13 @@ to the repo. Open it directly, or serve it with GitHub Pages.
 
 ## What "inactive" means
 
-A user country is inactive when, over the window:
+A user country is inactive when, over the window (a trailing **30 closed
+days** by default, so the flag reads a monthly rate rather than one noisy
+week):
 
 | Rule | Value | Why |
 |---|---|---|
-| Bid rate below | **0.9 %** | Just under the biggest diluted markets (US ~0.92 %, CA ~0.95 %), which stay off the list, while catching TR (~0.88 %) and everything genuinely weak below it |
+| Bid rate below | **0.8 %** | Under the biggest diluted markets on a monthly window (US ~0.91 %), which stay off the list, while catching FR (~0.75 %) and everything genuinely weak below it. TR/SG/HK float above this line and ride in on the watchlist instead. |
 
 A **watchlist** (`WATCHLIST` in `scripts/update_dashboard.py`, currently TR,
 SG, HK) pins countries onto the list regardless of their bid rate. They render
@@ -149,8 +151,11 @@ The HTML is also uploaded as a workflow artifact on every run, successful or not
 
 ### Things that will bite you
 
-- **The daily table keeps only ~36 closed days.** A window older than that
-  returns nothing. The generator refuses to write an empty dashboard rather
+- **The daily table keeps only ~36 closed days.** The default 30-day window
+  leaves little headroom — a few days of pipeline delay silently shortens the
+  window (the page's window label always shows the real dates). A window older
+  than retention returns nothing. The generator refuses to write an empty
+  dashboard rather
   than silently publishing a blank table, so the previous `index.html` survives
   a bad window.
 - **The window ends yesterday, not today.** `ssp_events_daily_simplified` is

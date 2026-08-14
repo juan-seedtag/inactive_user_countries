@@ -32,7 +32,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 # A country is "inactive" when demand barely responds to its supply. 0.9% sits
 # just under the biggest diluted markets (US ~0.92%, CA ~0.95%) while catching
 # TR (~0.88%) and everything genuinely weak below it.
-BID_RATE_THRESHOLD = 0.009
+BID_RATE_THRESHOLD = 0.008
 
 # Countries pinned to the list regardless of their bid rate. They render with
 # a "Watchlist" pill so the page never implies they met the threshold — this
@@ -365,7 +365,7 @@ def render(payload: dict) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--days", type=int, default=7, help="window length (default 7)")
+    ap.add_argument("--days", type=int, default=30, help="window length (default 30)")
     ap.add_argument(
         "--end-date",
         type=lambda s: date.fromisoformat(s),
