@@ -150,7 +150,6 @@ section[hidden],[hidden]{display:none;}
   <div class="stat"><div class="k">Requests</div><div class="v" id="am-r"></div></div>
   <div class="stat"><div class="k">Bids</div><div class="v" id="am-b"></div></div>
   <div class="stat"><div class="k">Impressions</div><div class="v" id="am-i"></div></div>
-  <div class="stat statbtn" id="am-zt" role="button" tabindex="0" title="Zero bids, or a bid rate under 5% of the benchmark median — click to filter both tables"><div class="k">Near-zero demand</div><div class="v dead" id="am-z"></div></div>
 </div>
 <div class="tblwrap"><table>
 <thead><tr><th>User country</th><th title="Bid-rate trend by month (monthly events table, same Beachfront-excluded perimeter)">Trend</th><th>Requests</th><th>Bids</th><th>Wins</th><th>Impressions</th><th>Revenue</th><th>Pub cost</th><th>Margin</th><th>Bid rate</th><th>Win rate</th><th>Fill rate</th><th>Status</th><th>Demand</th></tr></thead>
@@ -353,8 +352,11 @@ function renderSection(cs, tbodyId, statPrefix){
   $(statPrefix+"-r").textContent = fmt(cs.reduce((s,c)=>s+c.rq,0));
   $(statPrefix+"-b").textContent = fmt(cs.reduce((s,c)=>s+c.b,0));
   $(statPrefix+"-i").textContent = fmt(cs.reduce((s,c)=>s+c.i,0));
-  const zc = cs.filter(isDead);
-  $(statPrefix+"-z").textContent = zc.length + " · " + fmt(zc.reduce((s,c)=>s+c.rq,0));
+  const zt = $(statPrefix+"-z");   // Active Markets has no near-zero tile
+  if (zt){
+    const zc = cs.filter(isDead);
+    zt.textContent = zc.length + " · " + fmt(zc.reduce((s,c)=>s+c.rq,0));
+  }
   const barMax = Math.max(1, ...cs.map(c=>c.rq));
   const qq = qStr.trim().toLowerCase();
   let list = cs;
@@ -685,7 +687,7 @@ function setZero(on){
   render(); applyMapDim();
 }
 $("zeroonly").addEventListener("click", ()=>setZero(!zeroOnly));
-["am","ge"].forEach(p=>{
+["ge"].forEach(p=>{
   const t = $(p+"-zt");
   t.addEventListener("click", ()=>setZero(!zeroOnly));
   t.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); setZero(!zeroOnly); } });
