@@ -111,8 +111,9 @@ mode, hover tooltips, click a country to jump to its table row) sitting on top
 of the complete dashboard — same tabs, drill-downs and footnotes as index.html,
 same cached payload. On top of that it adds: per-country bid-rate sparklines
 and a "what changed" strip (both fed by `data/trends.json`), request-volume
-bars in the cells, a country search box that also dims the map, a zero-bid
-filter (toggle button + clickable stat tile), a compact-columns toggle, sticky
+bars in the cells, a country search box that also dims the map, a near-zero-demand
+filter (toggle button + clickable stat tile; zero bids or a bid rate under 5%
+of the benchmark median — strict zero-bid is always empty at monthly grain), a compact-columns toggle, sticky
 tabs, table-row hover highlighting the country on the map, deep links
 (`#s/ge`, `#c/PH`, `#a/PH//<pipe>/<dsp>`), and status pills computed relative
 to the live benchmark median instead of hardcoded thresholds. Rebuild with:

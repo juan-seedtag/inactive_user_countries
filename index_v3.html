@@ -149,7 +149,7 @@ section[hidden],[hidden]{display:none;}
   <button class="tab" id="tab-active" role="tab" aria-selected="true" aria-controls="sec-active">Active Markets <span class="tab-n" id="am-n"></span></button>
   <button class="tab" id="tab-geo" role="tab" aria-selected="false" aria-controls="sec-geo">Geo Expansion <span class="tab-n" id="ge-n"></span></button>
 </div>
-<div class="ctrl"><button class="tgl" id="expall">Expand all</button><button class="tgl" id="compact" aria-pressed="false">Compact columns</button><button class="tgl" id="zeroonly" aria-pressed="false">Zero-bid only</button><input type="search" id="q" placeholder="Filter countries…" aria-label="Filter countries"><span class="foot" style="margin:0">Click a country to see its editorial groups (top 15 by volume, ≥100K requests) · «SSPs →» drills into the demand side</span></div>
+<div class="ctrl"><button class="tgl" id="expall">Expand all</button><button class="tgl" id="compact" aria-pressed="false">Compact columns</button><button class="tgl" id="zeroonly" aria-pressed="false">Near-zero demand only</button><input type="search" id="q" placeholder="Filter countries…" aria-label="Filter countries"><span class="foot" style="margin:0">Click a country to see its editorial groups (top 15 by volume, ≥100K requests) · «SSPs →» drills into the demand side</span></div>
 
 <div id="sec-active" role="tabpanel" aria-labelledby="tab-active">
 <div class="stats">
@@ -157,7 +157,7 @@ section[hidden],[hidden]{display:none;}
   <div class="stat"><div class="k">Requests</div><div class="v" id="am-r"></div></div>
   <div class="stat"><div class="k">Bids</div><div class="v" id="am-b"></div></div>
   <div class="stat"><div class="k">Impressions</div><div class="v" id="am-i"></div></div>
-  <div class="stat statbtn" id="am-zt" role="button" tabindex="0" title="Countries with zero bids this window — click to filter both tables"><div class="k">Zero-bid countries</div><div class="v dead" id="am-z"></div></div>
+  <div class="stat statbtn" id="am-zt" role="button" tabindex="0" title="Zero bids, or a bid rate under 5% of the benchmark median — click to filter both tables"><div class="k">Near-zero demand</div><div class="v dead" id="am-z"></div></div>
 </div>
 <div class="tblwrap"><table>
 <thead><tr><th>User country</th><th title="Bid-rate trend by month (monthly events table, same Beachfront-excluded perimeter)">Trend</th><th>Requests</th><th>Bids</th><th>Wins</th><th>Impressions</th><th>Revenue</th><th>Pub cost</th><th>Margin</th><th>Bid rate</th><th>Win rate</th><th>Fill rate</th><th>Status</th><th>Demand</th></tr></thead>
@@ -171,7 +171,7 @@ section[hidden],[hidden]{display:none;}
   <div class="stat"><div class="k">Requests</div><div class="v dead" id="ge-r"></div></div>
   <div class="stat"><div class="k">Bids</div><div class="v" id="ge-b"></div></div>
   <div class="stat"><div class="k">Impressions</div><div class="v" id="ge-i"></div></div>
-  <div class="stat statbtn" id="ge-zt" role="button" tabindex="0" title="Countries with zero bids this window — click to filter both tables"><div class="k">Zero-bid countries</div><div class="v dead" id="ge-z"></div></div>
+  <div class="stat statbtn" id="ge-zt" role="button" tabindex="0" title="Zero bids, or a bid rate under 5% of the benchmark median — click to filter both tables"><div class="k">Near-zero demand</div><div class="v dead" id="ge-z"></div></div>
 </div>
 <div class="tblwrap"><table>
 <thead><tr><th>User country</th><th title="Bid-rate trend by month (monthly events table, same Beachfront-excluded perimeter)">Trend</th><th>Requests</th><th>Bids</th><th>Wins</th><th>Impressions</th><th>Revenue</th><th>Pub cost</th><th>Margin</th><th>Bid rate</th><th>Win rate</th><th>Fill rate</th><th>Status</th><th>Demand</th></tr></thead>
@@ -283,6 +283,10 @@ const TRENDS = {"months":["2026-01","2026-02","2026-03","2026-04","2026-05","202
 const bmSorted = (DATA.meta.benchmarks||[]).map(b=>b.br).filter(v=>v!=null).sort((a,b)=>a-b);
 const BENCH_MED = bmSorted.length ? bmSorted[Math.floor(bmSorted.length/2)] : 0.02;
 let qStr = "", zeroOnly = false;
+// "Dead demand" = zero bids OR bid rate under 5% of the live benchmark median —
+// the same band as the red "Near zero" pill. A strict bids===0 test is always
+// empty at a 30-day country grain (every 1M+ country gets at least one bid).
+const isDead = c => c.b===0 || (c.br!=null && c.br < 0.05*BENCH_MED);
 function barW(v, mx){
   const mn = 1e6;                       // request floor = zero-width baseline
   if (v<=mn || mx<=mn) return 2;
@@ -356,13 +360,13 @@ function renderSection(cs, tbodyId, statPrefix){
   $(statPrefix+"-r").textContent = fmt(cs.reduce((s,c)=>s+c.rq,0));
   $(statPrefix+"-b").textContent = fmt(cs.reduce((s,c)=>s+c.b,0));
   $(statPrefix+"-i").textContent = fmt(cs.reduce((s,c)=>s+c.i,0));
-  const zc = cs.filter(c=>c.b===0);
+  const zc = cs.filter(isDead);
   $(statPrefix+"-z").textContent = zc.length + " · " + fmt(zc.reduce((s,c)=>s+c.rq,0));
   const barMax = Math.max(1, ...cs.map(c=>c.rq));
   const qq = qStr.trim().toLowerCase();
   let list = cs;
   if (qq) list = list.filter(c=>c.c.toLowerCase().includes(qq) || (NAMES[c.c]||"").toLowerCase().includes(qq));
-  if (zeroOnly) list = list.filter(c=>c.b===0);
+  if (zeroOnly) list = list.filter(isDead);
   tb.innerHTML = "";
   if (!list.length){
     tb.innerHTML = `<tr><td colspan="14" class="empty">${cs.length ? "No countries match the current filter in this section." : "No countries above the volume floor in this section for this window."}</td></tr>`;
@@ -677,7 +681,7 @@ function applyMapDim(){
     const cc = el.dataset.cc, r = byCC[cc];
     let dim = false;
     if (qq) dim = !(cc.toLowerCase().includes(qq) || (NAMES[cc]||"").toLowerCase().includes(qq));
-    if (!dim && zeroOnly) dim = !(r && r.b===0);
+    if (!dim && zeroOnly) dim = !(r && isDead(r));
     el.classList.toggle("dim", dim);
   });
 }
