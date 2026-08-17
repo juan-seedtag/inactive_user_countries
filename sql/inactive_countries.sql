@@ -1,10 +1,10 @@
 -- @user:{user_email} @skill:barbi
--- Phase 1: identify the inactive user countries. One grain, small output —
--- the country list feeds the phase-2 drill query as a filter.
---
--- "Inactive" = bid rate below {bid_rate_threshold} on at least {request_floor}
--- requests over the window. Date literals are computed by the caller, never by
--- the warehouse, so a run is reproducible from its output alone.
+-- Phase 1: every user country with at least {request_floor} requests over the
+-- window. One grain, small output — the country list feeds the phase-2 drill
+-- query as a filter. The Active Market / Geo Expansion split happens in the
+-- generator, not here: the SQL has no threshold, so the sections can be
+-- re-cut without re-scanning. Date literals are computed by the caller, never
+-- by the warehouse, so a run is reproducible from its output alone.
 WITH country AS (
     SELECT
         user_country,
@@ -42,12 +42,8 @@ WITH country AS (
       AND user_country NOT IN ('', 'undefined')
       AND length(user_country) = 2
     GROUP BY user_country
-    -- Watchlist countries are pinned onto the list regardless of bid rate
-    -- (the page flags them, so they are never mistaken for threshold hits).
-    -- They still need the request floor: a rate on no volume is noise.
+    -- Request floor only: a rate on no volume is noise, not signal.
     HAVING SUM(ssp_requests) >= {request_floor}
-       AND (SUM(ssp_bids) * 1.0 / SUM(ssp_requests) < {bid_rate_threshold}
-            OR user_country IN ({watchlist}))
 )
 SELECT
     user_country,

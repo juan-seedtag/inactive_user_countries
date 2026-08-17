@@ -1,0 +1,298 @@
+<title>User Countries Map — SSP Supply Health</title>
+<style>
+:root{
+  --bg:#f7f8f7; --surface:#ffffff; --ink:#1c2321; --muted:#5c6b66; --line:#dde4e1;
+  --accent:#0e7a5f; --dead:#b3261e; --dead-bg:#fbeceb; --warn:#8a6d00; --warn-bg:#f7f1dc;
+  --row-hover:#f0f4f2; --sea:#eef2f0; --nodata:#d8dedb;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#131817; --surface:#1b2220; --ink:#e4ebe8; --muted:#8fa39c; --line:#2b3634;
+  --accent:#4dc3a2; --dead:#ff8a80; --dead-bg:#3a2321; --warn:#e0c25a; --warn-bg:#332e1c;
+  --row-hover:#212b28; --sea:#161d1b; --nodata:#242e2b;
+}}
+:root[data-theme="dark"]{
+  --bg:#131817; --surface:#1b2220; --ink:#e4ebe8; --muted:#8fa39c; --line:#2b3634;
+  --accent:#4dc3a2; --dead:#ff8a80; --dead-bg:#3a2321; --warn:#e0c25a; --warn-bg:#332e1c;
+  --row-hover:#212b28; --sea:#161d1b; --nodata:#242e2b;
+}
+:root[data-theme="light"]{
+  --bg:#f7f8f7; --surface:#ffffff; --ink:#1c2321; --muted:#5c6b66; --line:#dde4e1;
+  --accent:#0e7a5f; --dead:#b3261e; --dead-bg:#fbeceb; --warn:#8a6d00; --warn-bg:#f7f1dc;
+  --row-hover:#f0f4f2; --sea:#eef2f0; --nodata:#d8dedb;
+}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:2rem 1.5rem 4rem;}
+.wrap{max-width:1080px;margin:0 auto;}
+h1{font-size:1.45rem;margin:0 0 .25rem;letter-spacing:-.01em;text-wrap:balance;}
+.sub{color:var(--muted);margin:0 0 1.25rem;font-size:.9rem;}
+.ctrl{margin:0 0 .75rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;}
+button.tgl{background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:.35rem .8rem;font:inherit;font-size:.82rem;cursor:pointer;}
+button.tgl:hover{background:var(--row-hover);}
+button.tgl[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);font-weight:700;}
+button.tgl:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+.mapwrap{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:.5rem;position:relative;}
+#map{width:100%;height:auto;display:block;background:var(--sea);border-radius:5px;}
+#map path,#map circle{stroke:var(--surface);stroke-width:.4;cursor:pointer;}
+#map path:hover,#map circle:hover{stroke:var(--ink);stroke-width:1;}
+#map .nodata{fill:var(--nodata);cursor:default;}
+#map-tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:.45rem .7rem;font-size:.8rem;box-shadow:0 2px 8px rgba(0,0,0,.15);display:none;z-index:5;max-width:260px;}
+#map-tip b{font-size:.86rem;}
+#map-tip .row{display:flex;justify-content:space-between;gap:1rem;font-variant-numeric:tabular-nums;}
+#map-tip .row span:first-child{color:var(--muted);}
+.legend{display:flex;align-items:center;gap:.6rem;margin:.6rem .25rem 0;font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums;}
+#legend-bar{flex:0 0 220px;height:10px;border-radius:5px;border:1px solid var(--line);}
+.legend .swatch{display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--nodata);border:1px solid var(--line);vertical-align:-2px;margin-right:.3rem;}
+.tabs{display:flex;gap:.5rem;margin:1.5rem 0 1rem;border-bottom:1px solid var(--line);}
+button.tab{background:none;border:none;border-bottom:3px solid transparent;color:var(--muted);font:inherit;font-size:.95rem;font-weight:600;padding:.5rem .9rem .45rem;cursor:pointer;}
+button.tab:hover{color:var(--ink);background:var(--row-hover);border-radius:6px 6px 0 0;}
+button.tab[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent);}
+button.tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;}
+.tab-n{font-weight:400;font-size:.8rem;color:var(--muted);margin-left:.25rem;}
+.tblwrap{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow-x:auto;}
+table{border-collapse:collapse;width:100%;min-width:700px;}
+th{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-align:right;padding:.7rem .9rem;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:var(--surface);}
+th:first-child{text-align:left;}
+td{padding:.55rem .9rem;text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--line);white-space:nowrap;}
+td:first-child{text-align:left;}
+tr.hl{outline:2px solid var(--accent);outline-offset:-2px;}
+.cc{font-weight:700;}
+.cname{color:var(--muted);font-weight:400;font-size:.85rem;margin-left:.4rem;}
+.pill{display:inline-block;font-size:.72rem;font-weight:600;padding:.1rem .5rem;border-radius:999px;}
+.pill.dead{background:var(--dead-bg);color:var(--dead);}
+.foot{color:var(--muted);font-size:.8rem;font-style:italic;margin-top:1rem;}
+section[hidden]{display:none;}
+</style>
+<div class="wrap">
+<h1>User countries map — SSP supply health</h1>
+<p class="sub">Every user country coloured by the selected metric · __WINDOW_LABEL__ · click a country to jump to its row · test page, rendered from the main dashboard's cached data</p>
+
+<div class="ctrl" role="group" aria-label="Colour metric">
+  <span class="foot" style="margin:0">Colour by:</span>
+  <button class="tgl" data-metric="br" aria-pressed="true">Bid rate</button>
+  <button class="tgl" data-metric="rq" aria-pressed="false">Requests</button>
+  <button class="tgl" data-metric="rv" aria-pressed="false">Revenue</button>
+  <button class="tgl" data-metric="mg" aria-pressed="false">Margin</button>
+</div>
+<div class="mapwrap">
+  <svg id="map" viewBox="0 0 960 410" role="img" aria-label="World map coloured by selected metric"></svg>
+  <div id="map-tip"></div>
+</div>
+<div class="legend">
+  <span id="legend-min"></span>
+  <div id="legend-bar"></div>
+  <span id="legend-max"></span>
+  <span style="margin-left:1rem"><span class="swatch"></span>no data / below floor</span>
+</div>
+
+<div class="tabs" role="tablist" aria-label="Country sections">
+  <button class="tab" id="tab-active" role="tab" aria-selected="true" aria-controls="sec-active">Active Markets <span class="tab-n" id="am-n"></span></button>
+  <button class="tab" id="tab-geo" role="tab" aria-selected="false" aria-controls="sec-geo">Geo Expansion <span class="tab-n" id="ge-n"></span></button>
+</div>
+<div id="sec-active" role="tabpanel">
+<div class="tblwrap"><table>
+<thead><tr><th>#</th><th>User country</th><th>Requests</th><th>Bids</th><th>Bid rate</th><th>Revenue</th><th>Margin</th></tr></thead>
+<tbody id="tb-active"></tbody>
+</table></div>
+</div>
+<div id="sec-geo" role="tabpanel" hidden>
+<div class="tblwrap"><table>
+<thead><tr><th>#</th><th>User country</th><th>Requests</th><th>Bids</th><th>Bid rate</th><th>Revenue</th><th>Margin</th></tr></thead>
+<tbody id="tb-geo"></tbody>
+</table></div>
+</div>
+
+<p class="foot">Source: same cached payload as the main dashboard (SSP events daily, user-country grain, Beachfront excluded), __WINDOW_LABEL__. Geometry: Natural Earth 110m (public domain); micro-territories render as dots; <span id="unmapped-note"></span>. Margin = (Revenue − Pub cost) / Revenue, operational USD estimates — directional only. Generated __GENERATED_AT__.</p>
+</div>
+<script>
+const DATA = __PAYLOAD__;
+const GEO = __MAP_GEO__;
+const NAMES = __NAMES__;
+const fmt = n => n>=1e9 ? (n/1e9).toFixed(2)+"B" : n>=1e6 ? (n/1e6).toFixed(1)+"M" : n>=1e3 ? (n/1e3).toFixed(1)+"K" : String(n);
+const pct = v => v==null ? "–" : (v*100).toFixed(v*100<0.01?4:2)+"%";
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const money = v => v==null ? "–" :
+  "$"+(v>=1000 ? Math.round(v).toLocaleString("en-US") : v>=100 ? v.toFixed(0) : v.toFixed(2));
+const $ = id => document.getElementById(id);
+const cname = c => NAMES[c] ? `${c} — ${NAMES[c]}` : c;
+
+// Fixed fallback keeps old caches working; new caches carry the list in meta.
+const ACTIVE = DATA.meta.active_markets ||
+  ["US","MX","BR","AR","CO","ES","FR","IT","GB","DE","NL","AE"];
+const rows = DATA.countries.filter(c=>c.c && c.g==null);
+const byCC = {};
+rows.forEach(r=>{ byCC[r.c] = r; r.mg = (r.rv && r.rv!==0) ? (r.rv-r.pc)/r.rv : null; });
+
+// --- Colour scales -----------------------------------------------------------
+// Theme colours resolved from CSS variables so both themes stay legible.
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+function hexToRgb(h){
+  h = h.replace("#","");
+  if (h.length===3) h = h.split("").map(x=>x+x).join("");
+  return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+}
+const lerp = (a,b,t) => a.map((v,i)=>Math.round(v+(b[i]-v)*t));
+const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+function quantile(sorted, q){
+  const pos = (sorted.length-1)*q, lo = Math.floor(pos);
+  return sorted[lo] + (sorted[Math.min(lo+1, sorted.length-1)]-sorted[lo])*(pos-lo);
+}
+
+// metric -> {value(r), domain(), colour(t in 0..1), label(v)}
+const METRICS = {
+  br: {name:"Bid rate", value:r=>r.br, label:pct,
+       domain:vs=>[0, quantile(vs,0.95)], scale:"linear"},
+  rq: {name:"Requests", value:r=>r.rq, label:fmt,
+       domain:vs=>[Math.max(1,vs[0]), vs[vs.length-1]], scale:"log"},
+  rv: {name:"Revenue",  value:r=>r.rv, label:money,
+       domain:vs=>[Math.max(0.01,vs[0]), vs[vs.length-1]], scale:"log"},
+  mg: {name:"Margin",   value:r=>r.mg, label:pct,
+       domain:()=>[-1,1], scale:"diverging"},
+};
+let metric = "br";
+
+function colourFor(v, dom, kind, cols){
+  const {low, high, dead} = cols;
+  if (v==null) return null;
+  if (kind==="diverging"){
+    const t = Math.max(-1, Math.min(1, v));
+    return t<0 ? rgb(lerp(cols.mid, dead, -t)) : rgb(lerp(cols.mid, high, t));
+  }
+  let t;
+  if (kind==="log"){
+    const [a,b] = dom;
+    t = (Math.log(Math.max(v,a))-Math.log(a)) / (Math.log(b)-Math.log(a) || 1);
+  } else {
+    t = (v-dom[0]) / ((dom[1]-dom[0]) || 1);
+  }
+  return rgb(lerp(low, high, Math.max(0, Math.min(1, t))));
+}
+
+function paint(){
+  const m = METRICS[metric];
+  const cols = {
+    low: lerp(hexToRgb(css("--dead")), hexToRgb(css("--surface")||"#ffffff"), 0.55),
+    high: hexToRgb(css("--accent")),
+    dead: hexToRgb(css("--dead")),
+    mid: lerp(hexToRgb(css("--nodata")||"#d8dedb"), [128,128,128], 0),
+  };
+  const vs = rows.map(r=>m.value(r)).filter(v=>v!=null).sort((a,b)=>a-b);
+  const dom = m.domain(vs);
+  document.querySelectorAll("#map [data-cc]").forEach(el=>{
+    const r = byCC[el.dataset.cc];
+    const c = r ? colourFor(m.value(r), dom, m.scale, cols) : null;
+    el.classList.toggle("nodata", !c);
+    if (c) el.style.fill = c; else el.style.removeProperty("fill");
+  });
+  // Legend
+  const stops = [];
+  for (let i=0;i<=10;i++){
+    const t = i/10;
+    let v;
+    if (m.scale==="diverging") v = -1 + 2*t;
+    else if (m.scale==="log") v = Math.exp(Math.log(dom[0]) + t*(Math.log(dom[1])-Math.log(dom[0])));
+    else v = dom[0] + t*(dom[1]-dom[0]);
+    stops.push(`${colourFor(v, dom, m.scale, cols)} ${t*100}%`);
+  }
+  $("legend-bar").style.background = `linear-gradient(90deg, ${stops.join(",")})`;
+  $("legend-min").textContent = m.name+" "+m.label(m.scale==="diverging" ? -1 : dom[0]);
+  $("legend-max").textContent = m.label(m.scale==="diverging" ? 1 : dom[1]) + (metric==="br" ? " (p95, clamped)" : "");
+}
+
+// --- Build the map -----------------------------------------------------------
+const svg = $("map");
+const SVGNS = "http://www.w3.org/2000/svg";
+Object.entries(GEO.paths).forEach(([cc, d])=>{
+  const p = document.createElementNS(SVGNS, "path");
+  p.setAttribute("d", d); p.dataset.cc = cc;
+  svg.appendChild(p);
+});
+Object.entries(GEO.points).forEach(([cc, [x,y]])=>{
+  const c = document.createElementNS(SVGNS, "circle");
+  c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", 2.4);
+  c.dataset.cc = cc;
+  svg.appendChild(c);
+});
+const unmapped = rows.filter(r=>!GEO.paths[r.c] && !GEO.points[r.c]).map(r=>r.c);
+$("unmapped-note").textContent = unmapped.length
+  ? `${unmapped.length} micro-territories with traffic have no geometry and appear only in the tables (${unmapped.join(", ")})`
+  : "all countries with traffic are on the map";
+
+// --- Tooltip -----------------------------------------------------------------
+const tip = $("map-tip");
+svg.addEventListener("mousemove", e=>{
+  const cc = e.target.dataset && e.target.dataset.cc;
+  if (!cc){ tip.style.display="none"; return; }
+  const r = byCC[cc];
+  tip.innerHTML = r
+    ? `<b>${esc(cname(cc))}</b>
+       <div class="row"><span>Requests</span><span>${fmt(r.rq)}</span></div>
+       <div class="row"><span>Bids</span><span>${fmt(r.b)}</span></div>
+       <div class="row"><span>Bid rate</span><span>${pct(r.br)}</span></div>
+       <div class="row"><span>Revenue</span><span>${money(r.rv)}</span></div>
+       <div class="row"><span>Margin</span><span>${pct(r.mg)}</span></div>
+       <div class="row"><span>Section</span><span>${ACTIVE.includes(cc)?"Active Market":"Geo Expansion"}</span></div>`
+    : `<b>${esc(cname(cc))}</b><div class="row"><span>No traffic above the floor this window</span></div>`;
+  tip.style.display = "block";
+  const box = svg.parentElement.getBoundingClientRect();
+  let x = e.clientX - box.left + 14, y = e.clientY - box.top + 14;
+  if (x + tip.offsetWidth > box.width) x -= tip.offsetWidth + 28;
+  if (y + tip.offsetHeight > box.height) y -= tip.offsetHeight + 28;
+  tip.style.left = x+"px"; tip.style.top = y+"px";
+});
+svg.addEventListener("mouseleave", ()=>{ tip.style.display="none"; });
+
+// --- Click to drill ------------------------------------------------------------
+svg.addEventListener("click", e=>{
+  const cc = e.target.dataset && e.target.dataset.cc;
+  if (!cc || !byCC[cc]) return;
+  selectTab(ACTIVE.includes(cc) ? "active" : "geo");
+  const row = $("row-"+cc);
+  if (!row) return;
+  row.scrollIntoView({behavior:"smooth", block:"center"});
+  document.querySelectorAll("tr.hl").forEach(t=>t.classList.remove("hl"));
+  row.classList.add("hl");
+});
+
+// --- Metric switcher -----------------------------------------------------------
+document.querySelectorAll("[data-metric]").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    metric = b.dataset.metric;
+    document.querySelectorAll("[data-metric]").forEach(x=>x.setAttribute("aria-pressed", x===b));
+    paint();
+  });
+});
+// Repaint on theme flips (the viewer toggle stamps data-theme on <html>).
+new MutationObserver(paint).observe(document.documentElement, {attributes:true, attributeFilter:["data-theme"]});
+if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", paint);
+
+// --- Tables ----------------------------------------------------------------
+function renderSection(cs, tbodyId){
+  const tb = $(tbodyId); tb.innerHTML = "";
+  cs.forEach((c,i)=>{
+    const tr = document.createElement("tr");
+    tr.id = "row-"+c.c;
+    tr.innerHTML = `<td>${i+1}</td>
+      <td><span class="cc">${esc(c.c)}</span><span class="cname">${NAMES[c.c]||""}</span></td>
+      <td>${fmt(c.rq)}</td><td>${fmt(c.b)}</td><td>${pct(c.br)}</td>
+      <td>${money(c.rv)}</td><td>${c.mg!=null && c.mg<0 ? `<span class="pill dead">${pct(c.mg)}</span>` : pct(c.mg)}</td>`;
+    tb.appendChild(tr);
+  });
+}
+function selectTab(which){
+  const active = which==="active";
+  $("sec-active").hidden = !active;
+  $("sec-geo").hidden = active;
+  $("tab-active").setAttribute("aria-selected", active);
+  $("tab-geo").setAttribute("aria-selected", !active);
+}
+$("tab-active").addEventListener("click", ()=>selectTab("active"));
+$("tab-geo").addEventListener("click", ()=>selectTab("geo"));
+
+const sorted = rows.slice().sort((a,b)=>b.rq-a.rq);
+const act = sorted.filter(c=>ACTIVE.includes(c.c));
+const geo = sorted.filter(c=>!ACTIVE.includes(c.c));
+$("am-n").textContent = `(${act.length})`;
+$("ge-n").textContent = `(${geo.length})`;
+renderSection(act, "tb-active");
+renderSection(geo, "tb-geo");
+paint();
+</script>

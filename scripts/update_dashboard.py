@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Rebuild the inactive-user-countries dashboard from Trino.
+"""Rebuild the user-countries dashboard from Trino.
 
-Queries the SSP events daily table for user countries whose bid rate is below
-the inactivity threshold, plus the editorial groups inside each of them, and
-renders `index.html` from `template/dashboard.html`.
+Queries the SSP events daily table for every user country above the request
+floor, plus the editorial groups inside each of them, and renders `index.html`
+from `template/dashboard.html` in two sections: Active Markets (a fixed list)
+and Geo Expansion (everything else).
 
 Usage:
     python scripts/update_dashboard.py                    # last 7 closed days
@@ -28,16 +29,14 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
-# --- Inactivity definition -------------------------------------------------
-# A country is "inactive" when demand barely responds to its supply. 0.9% sits
-# just under the biggest diluted markets (US ~0.92%, CA ~0.95%) while catching
-# TR (~0.88%) and everything genuinely weak below it.
-BID_RATE_THRESHOLD = 0.008
-
-# Countries pinned to the list regardless of their bid rate. They render with
-# a "Watchlist" pill so the page never implies they met the threshold — this
-# is for markets someone wants to keep an eye on (HK/SG hover around 1%).
-WATCHLIST = ["TR", "SG", "HK"]
+# --- Section definition ------------------------------------------------------
+# No inactivity threshold: every country above the request floor is shown,
+# split into two sections. Active Markets is the fixed commercial footprint;
+# everything else is Geo Expansion. Membership is decided here (not in SQL) so
+# the sections can be re-cut from cache without re-scanning the warehouse.
+ACTIVE_MARKETS = [
+    "US", "MX", "BR", "AR", "CO", "ES", "FR", "IT", "GB", "DE", "NL", "AE",
+]
 REQUEST_FLOOR = 1_000_000      # ignore countries too small to read a rate from
 DETAIL_FLOOR = 100_000         # ignore editorial groups too small to matter
 TOP_N_GROUPS = 15              # editorial groups shown per country
@@ -108,27 +107,28 @@ def fetch(start: date, end: date) -> dict:
         "end_date": end.isoformat(),
     }
 
-    # Phase 1 — identify inactive countries (cheap output, one grain).
+    # Phase 1 — every country above the request floor (cheap output, one grain).
     main_sql = load_sql(
         "inactive_countries.sql",
-        bid_rate_threshold=BID_RATE_THRESHOLD,
         request_floor=REQUEST_FLOOR,
-        watchlist=", ".join(f"'{c}'" for c in WATCHLIST) or "''",
         **common,
     )
-    print(f"Phase 1: inactive countries {start} .. {end} "
-          f"(threshold {BID_RATE_THRESHOLD:.3%})…", flush=True)
+    print(f"Phase 1: all user countries {start} .. {end} "
+          f"(floor {REQUEST_FLOOR:,} requests)…", flush=True)
     rows = run_trino_query(main_sql)
-    print(f"  {len(rows)} inactive countries", flush=True)
 
     countries = [slim(r) for r in rows]
     if not countries:
         raise SystemExit(
-            "Query returned no inactive countries — refusing to overwrite the "
+            "Query returned no countries — refusing to overwrite the "
             "dashboard with an empty table. Check the date window: the daily "
             "table retains roughly 36 closed days."
         )
     inactive = [c["c"] for c in countries]
+    n_active = sum(1 for c in inactive if c in ACTIVE_MARKETS)
+    print(f"  {len(rows)} countries "
+          f"({n_active} active markets, {len(rows) - n_active} geo expansion)",
+          flush=True)
 
     # Phase 2 — the entire supply drill (EG, country x SSP, EG x SSP) in ONE
     # scan, filtered to the inactive countries from phase 1.
@@ -181,7 +181,7 @@ def fetch(start: date, end: date) -> dict:
             "start_date": start.isoformat(),
             "end_date": end.isoformat(),
             "window_days": (end - start).days + 1,
-            "bid_rate_threshold": BID_RATE_THRESHOLD,
+            "active_markets": ACTIVE_MARKETS,
             "request_floor": REQUEST_FLOOR,
             "detail_floor": DETAIL_FLOOR,
             "top_n": TOP_N_GROUPS,
@@ -194,7 +194,6 @@ def fetch(start: date, end: date) -> dict:
             "channel_top_n": CHANNEL_TOP_N,
             "adomain_top_n": ADOMAIN_TOP_N,
             "key_markets": DEMAND_KEY_MARKETS,
-            "watchlist": WATCHLIST,
         },
         "countries": countries,
         "details": details,
@@ -297,22 +296,13 @@ def render(payload: dict) -> str:
         f"{b['c']} {b['br'] * 100:.2f}%" for b in meta["benchmarks"] if b["br"] is not None
     ) or "unavailable for this window"
 
-    watchlist = meta.get("watchlist") or []
-    watchlist_note = (
-        f" · plus watchlist: {', '.join(watchlist)}" if watchlist else ""
-    )
-    watchlist_foot = (
-        f" Watchlist countries ({', '.join(watchlist)}) are pinned to the list "
-        "regardless of bid rate and flagged as such."
-        if watchlist
-        else ""
-    )
+    active_markets = meta.get("active_markets") or ACTIVE_MARKETS
 
     substitutions = {
         "__PAYLOAD__": json.dumps(payload, separators=(",", ":"), ensure_ascii=False),
         "__WINDOW_LABEL__": window_label,
         "__WINDOW_DAYS__": str(meta["window_days"]),
-        "__THRESHOLD_PCT__": f"{meta['bid_rate_threshold'] * 100:.2f}%",
+        "__ACTIVE_MARKETS__": ", ".join(active_markets),
         "__FLOOR_LABEL__": fmt_count(meta["request_floor"]),
         "__DETAIL_FLOOR_LABEL__": fmt_count(meta["detail_floor"]),
         "__TOP_N__": str(meta["top_n"]),
@@ -321,8 +311,6 @@ def render(payload: dict) -> str:
         "__ADOMAIN_TOP_N__": str(meta.get("adomain_top_n", ADOMAIN_TOP_N)),
         "__BENCHMARKS__": benchmarks,
         "__GENERATED_AT__": meta["generated_at"],
-        "__WATCHLIST_NOTE__": watchlist_note,
-        "__WATCHLIST_FOOT__": watchlist_foot,
     }
 
     html = TEMPLATE.read_text(encoding="utf-8")
@@ -393,13 +381,15 @@ def main() -> None:
         )
 
     OUTPUT_HTML.write_text(render(payload), encoding="utf-8")
-    n_c = len(payload["countries"])
+    active = payload["meta"].get("active_markets") or ACTIVE_MARKETS
+    n_a = sum(1 for c in payload["countries"] if c["c"] in active)
+    n_g = len(payload["countries"]) - n_a
     n_d = len(payload["details"])
     total = sum(c["rq"] for c in payload["countries"])
     print(
         f"Wrote {OUTPUT_HTML.relative_to(PROJECT_ROOT)} — "
-        f"{n_c} inactive countries, {n_d} editorial-group rows, "
-        f"{fmt_count(total)} unmonetized requests"
+        f"{n_a} active markets + {n_g} geo-expansion countries, "
+        f"{n_d} editorial-group rows, {fmt_count(total)} requests"
     )
 
 

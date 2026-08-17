@@ -1,4 +1,4 @@
-<title>Inactive User Countries — SSP Supply Health</title>
+<title>User Countries — SSP Supply Health</title>
 <style>
 :root{
   --bg:#f7f8f7; --surface:#ffffff; --ink:#1c2321; --muted:#5c6b66; --line:#dde4e1;
@@ -51,6 +51,13 @@ tr.detail td:first-child{padding-left:2.4rem;color:var(--ink);}
 .pill{display:inline-block;font-size:.72rem;font-weight:600;padding:.1rem .5rem;border-radius:999px;}
 .pill.dead{background:var(--dead-bg);color:var(--dead);}
 .pill.low{background:var(--warn-bg);color:var(--warn);}
+.pill.ok{background:var(--detail-bg);color:var(--accent);}
+.tabs{display:flex;gap:.5rem;margin:0 0 1rem;border-bottom:1px solid var(--line);}
+button.tab{background:none;border:none;border-bottom:3px solid transparent;color:var(--muted);font:inherit;font-size:.95rem;font-weight:600;padding:.5rem .9rem .45rem;cursor:pointer;}
+button.tab:hover{color:var(--ink);background:var(--row-hover);border-radius:6px 6px 0 0;}
+button.tab[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent);}
+button.tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;}
+.tab-n{font-weight:400;font-size:.8rem;color:var(--muted);margin-left:.25rem;}
 .cc{font-weight:700;}
 .cname{color:var(--muted);font-weight:400;font-size:.85rem;margin-left:.4rem;}
 .foot{color:var(--muted);font-size:.8rem;font-style:italic;margin-top:1rem;}
@@ -75,22 +82,42 @@ button.drill:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
 section[hidden]{display:none;}
 </style>
 <div class="wrap">
-<h1>Inactive user countries — SSP supply health</h1>
-<p class="sub">User countries with a bid rate below __THRESHOLD_PCT__, sorted by request volume · __WINDOW_LABEL__ (last __WINDOW_DAYS__ closed days) · countries with ≥__FLOOR_LABEL__ requests__WATCHLIST_NOTE__</p>
+<h1>User countries — SSP supply health</h1>
+<p class="sub">All user countries with ≥__FLOOR_LABEL__ requests, sorted by request volume · __WINDOW_LABEL__ (last __WINDOW_DAYS__ closed days) · Active Markets: __ACTIVE_MARKETS__ · every other country under Geo Expansion</p>
 <nav class="crumbs" id="crumbs" hidden aria-label="Drill path"></nav>
 
 <section id="view-supply">
-<div class="stats">
-  <div class="stat"><div class="k">Inactive countries</div><div class="v" id="s-c"></div></div>
-  <div class="stat"><div class="k">Unmonetized requests</div><div class="v dead" id="s-r"></div></div>
-  <div class="stat"><div class="k">Bids</div><div class="v" id="s-b"></div></div>
-  <div class="stat"><div class="k">Impressions</div><div class="v" id="s-i"></div></div>
+<div class="tabs" role="tablist" aria-label="Country sections">
+  <button class="tab" id="tab-active" role="tab" aria-selected="true" aria-controls="sec-active">Active Markets <span class="tab-n" id="am-n"></span></button>
+  <button class="tab" id="tab-geo" role="tab" aria-selected="false" aria-controls="sec-geo">Geo Expansion <span class="tab-n" id="ge-n"></span></button>
 </div>
 <div class="ctrl"><button class="tgl" id="expall">Expand all</button><span class="foot" style="margin:0">Click a country to see its editorial groups (top __TOP_N__ by volume, ≥__DETAIL_FLOOR_LABEL__ requests) · «SSPs →» drills into the demand side</span></div>
+
+<div id="sec-active" role="tabpanel" aria-labelledby="tab-active">
+<div class="stats">
+  <div class="stat"><div class="k">Countries</div><div class="v" id="am-c"></div></div>
+  <div class="stat"><div class="k">Requests</div><div class="v" id="am-r"></div></div>
+  <div class="stat"><div class="k">Bids</div><div class="v" id="am-b"></div></div>
+  <div class="stat"><div class="k">Impressions</div><div class="v" id="am-i"></div></div>
+</div>
 <div class="tblwrap"><table>
 <thead><tr><th>User country</th><th>Requests</th><th>Bids</th><th>Wins</th><th>Impressions</th><th>Revenue</th><th>Pub cost</th><th>Margin</th><th>Bid rate</th><th>Win rate</th><th>Fill rate</th><th>Status</th><th>Demand</th></tr></thead>
-<tbody id="tb"></tbody>
+<tbody id="tb-active"></tbody>
 </table></div>
+</div>
+
+<div id="sec-geo" role="tabpanel" aria-labelledby="tab-geo" hidden>
+<div class="stats">
+  <div class="stat"><div class="k">Countries</div><div class="v" id="ge-c"></div></div>
+  <div class="stat"><div class="k">Requests</div><div class="v dead" id="ge-r"></div></div>
+  <div class="stat"><div class="k">Bids</div><div class="v" id="ge-b"></div></div>
+  <div class="stat"><div class="k">Impressions</div><div class="v" id="ge-i"></div></div>
+</div>
+<div class="tblwrap"><table>
+<thead><tr><th>User country</th><th>Requests</th><th>Bids</th><th>Wins</th><th>Impressions</th><th>Revenue</th><th>Pub cost</th><th>Margin</th><th>Bid rate</th><th>Win rate</th><th>Fill rate</th><th>Status</th><th>Demand</th></tr></thead>
+<tbody id="tb-geo"></tbody>
+</table></div>
+</div>
 </section>
 
 <section id="view-channels" hidden>
@@ -111,7 +138,7 @@ section[hidden]{display:none;}
 <p class="foot">Top __ADOMAIN_TOP_N__ advertiser domains by bids for this DSP in this demand scope, same window. Only bids that actually happened appear — a brand not bidding leaves no trace.</p>
 </section>
 
-<p class="foot">Source: SSP events daily — all products, user-country grain, __WINDOW_LABEL__. Inactivity definition: bid rate &lt; __THRESHOLD_PCT__ with ≥__FLOOR_LABEL__ requests over the window.__WATCHLIST_FOOT__ Editorial-group detail: top __TOP_N__ per country, ≥__DETAIL_FLOOR_LABEL__ requests. Demand drill: SSP pipes from the same events table; DSP identity and brands from the enriched demand responses table (Beachfront excluded). Reference points (active markets, same window): __BENCHMARKS__.</p>
+<p class="foot">Source: SSP events daily — all products, user-country grain, __WINDOW_LABEL__. Every user country with ≥__FLOOR_LABEL__ requests over the window is shown; Active Markets is the fixed list (__ACTIVE_MARKETS__), every other country falls under Geo Expansion. Editorial-group detail: top __TOP_N__ per country, ≥__DETAIL_FLOOR_LABEL__ requests. Demand drill: SSP pipes from the same events table; DSP identity and brands from the enriched demand responses table (Beachfront excluded). Reference bid rates (same window): __BENCHMARKS__.</p>
 <p class="foot">Money columns are <b>operational figures in USD from the event stream</b>: Revenue = Seedtag revenue (net paid − post-auction discounts + curator margin); Pub cost = an <b>SSP-side allocation estimate</b> (impression cost + HB net insert cost); Margin = (Revenue − Pub cost) / Revenue. These are the only revenue/cost figures that exist at user-country grain — they do <b>not</b> reconcile with Finance's Publisher Revenue (publisher-reported, EUR, monthly-average FX, publisher grain only). True publisher payout is defined per publisher, never per user country, so splitting it by the viewer's country is a proxy: read Pub cost and Margin as directional only. The Brands view shows revenue from the enriched demand table, a slightly different adjustment basis.</p>
 <p class="foot">Last refreshed __GENERATED_AT__ · rebuilt daily from Trino by GitHub Actions.</p>
 </div>
@@ -190,7 +217,6 @@ function renderCrumbs(){
 }
 
 // --- View 1: supply (countries + editorial groups) --------------------------
-const tb = $("tb");
 let allOpen = false;
 function drillBtn(label, onClick){
   const b = document.createElement("button");
@@ -199,29 +225,47 @@ function drillBtn(label, onClick){
   return b;
 }
 function render(){
-  // Thresholds come from the payload so the page can never drift from the SQL
-  // that produced it. Rows are already filtered server-side; this is a guard.
-  const thr = DATA.meta.bid_rate_threshold;
+  // Section membership comes from the payload so the page can never drift
+  // from the generator that produced it. Rows are already floored server-side.
   const floor = DATA.meta.request_floor;
-  // Watchlist countries are pinned to the list regardless of their bid rate
-  // (they arrive from SQL with the same OR); shown with a "Watchlist" pill so
-  // the page never implies they met the threshold.
-  const watch = DATA.meta.watchlist || [];
-  const cs = DATA.countries.filter(c=>c.c && c.rq>=floor &&
-      ((c.br!=null && c.br<thr) || watch.includes(c.c))).sort((a,b)=>b.rq-a.rq);
-  $("s-c").textContent = cs.length;
-  $("s-r").textContent = fmt(cs.reduce((s,c)=>s+c.rq,0));
-  $("s-b").textContent = fmt(cs.reduce((s,c)=>s+c.b,0));
-  $("s-i").textContent = fmt(cs.reduce((s,c)=>s+c.i,0));
+  const ACTIVE = DATA.meta.active_markets || [];
+  const cs = DATA.countries.filter(c=>c.c && c.rq>=floor).sort((a,b)=>b.rq-a.rq);
+  const act = cs.filter(c=>ACTIVE.includes(c.c));
+  const geo = cs.filter(c=>!ACTIVE.includes(c.c));
+  $("am-n").textContent = `(${act.length})`;
+  $("ge-n").textContent = `(${geo.length})`;
+  renderSection(act, "tb-active", "am");
+  renderSection(geo, "tb-geo", "ge");
+}
+// One tab open at a time; selection survives re-renders (Expand all).
+function selectTab(which){
+  const active = which==="active";
+  $("sec-active").hidden = !active;
+  $("sec-geo").hidden = active;
+  $("tab-active").setAttribute("aria-selected", active);
+  $("tab-geo").setAttribute("aria-selected", !active);
+}
+$("tab-active").addEventListener("click", ()=>selectTab("active"));
+$("tab-geo").addEventListener("click", ()=>selectTab("geo"));
+function renderSection(cs, tbodyId, statPrefix){
+  const tb = $(tbodyId);
+  $(statPrefix+"-c").textContent = cs.length;
+  $(statPrefix+"-r").textContent = fmt(cs.reduce((s,c)=>s+c.rq,0));
+  $(statPrefix+"-b").textContent = fmt(cs.reduce((s,c)=>s+c.b,0));
+  $(statPrefix+"-i").textContent = fmt(cs.reduce((s,c)=>s+c.i,0));
   tb.innerHTML = "";
+  if (!cs.length){
+    tb.innerHTML = `<tr><td colspan="13" class="empty">No countries above the volume floor in this section for this window.</td></tr>`;
+    return;
+  }
   cs.forEach(c=>{
     const tr = document.createElement("tr");
     tr.className = "country"; tr.tabIndex = 0;
     tr.setAttribute("role","button"); tr.setAttribute("aria-expanded","false");
-    const status = (c.br!=null && c.br>=thr) ? '<span class="pill low">Watchlist</span>'
-      : c.b===0 ? '<span class="pill dead">No bids</span>'
+    const status = c.b===0 ? '<span class="pill dead">No bids</span>'
       : c.br<0.001 ? '<span class="pill dead">Near zero</span>'
-      : '<span class="pill low">Very low</span>';
+      : c.br<0.009 ? '<span class="pill low">Very low</span>'
+      : '<span class="pill ok">Active</span>';
     tr.innerHTML = `<td><span class="chev">▸</span><span class="cc">${esc(c.c)}</span><span class="cname">${NAMES[c.c]||""}</span></td>
       <td>${fmt(c.rq)}</td><td>${fmt(c.b)}</td><td>${fmt(c.w)}</td><td>${fmt(c.i)}</td>
       <td>${money(c.rv)}</td><td>${money(c.pc)}</td><td>${marginCell(c.rv,c.pc)}</td>
