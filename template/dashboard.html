@@ -123,7 +123,7 @@ section[hidden]{display:none;}
 <section id="view-channels" hidden>
 <div class="note ok" id="ch-context"></div>
 <div class="tblwrap"><table>
-<thead><tr><th>Demand entity</th><th>Connection</th><th>Requests</th><th>Bids</th><th>Bid rate</th><th>Wins</th><th>Impressions</th><th>Revenue</th><th>Pub cost</th><th>Margin</th><th>Brands</th></tr></thead>
+<thead><tr><th>Demand entity</th><th>Connection</th><th>Requests</th><th>Bids</th><th>Bid rate</th><th>Wins</th><th title="wins / bids">Win rate</th><th>Impressions</th><th>Revenue</th><th>Pub cost</th><th>Margin</th><th>Brands</th></tr></thead>
 <tbody id="ch-tb"></tbody>
 </table></div>
 <p class="foot">SSP pipes with ≥__CHANNEL_FLOOR_LABEL__ requests in this scope (top __CHANNEL_TOP_N__ by volume). A pipe carrying exactly one DSP over the window (Direct or BidSwitch), with no unattributed traffic, is shown as that DSP and can drill into brands. Reseller pools fan requests out inside the reseller's exchange — that step is not observable from Seedtag data, so the SSP is the last level. Pipes marked <b>1 DSP + unmapped</b> carry one named seat alongside traffic the demand table cannot attribute; naming the whole pipe after that seat would overstate it, so they stop here too.</p>
@@ -132,10 +132,10 @@ section[hidden]{display:none;}
 <section id="view-adomains" hidden>
 <div class="note" id="ad-scope"></div>
 <div class="tblwrap"><table>
-<thead><tr><th>Brand (adomain)</th><th>Bids</th><th>Impressions</th><th>Gross revenue (USD)</th></tr></thead>
+<thead><tr><th>Brand (adomain)</th><th>Bids</th><th>Impressions</th><th title="impressions / bids — the demand table does not track wins at brand grain">Imps / bids</th><th>Gross revenue (USD)</th></tr></thead>
 <tbody id="ad-tb"></tbody>
 </table></div>
-<p class="foot">Top __ADOMAIN_TOP_N__ advertiser domains by bids for this DSP in this demand scope, same window. Only bids that actually happened appear — a brand not bidding leaves no trace.</p>
+<p class="foot">Top __ADOMAIN_TOP_N__ advertiser domains by bids for this DSP in this demand scope, same window. Only bids that actually happened appear — a brand not bidding leaves no trace. Imps / bids is the demand-side conversion at this grain; the demand table does not track wins per brand, so a true win rate (wins / bids) exists only one level up, on the SSP pipes.</p>
 </section>
 
 <p class="foot">Source: SSP events daily — all products, user-country grain, __WINDOW_LABEL__. Every user country with ≥__FLOOR_LABEL__ requests over the window is shown; Active Markets is the fixed list (__ACTIVE_MARKETS__), every other country falls under Geo Expansion. Editorial-group detail: top __TOP_N__ per country, ≥__DETAIL_FLOOR_LABEL__ requests. Demand drill: SSP pipes from the same events table; DSP identity and brands from the enriched demand responses table (Beachfront excluded). Reference bid rates (same window): __BENCHMARKS__.</p>
@@ -325,12 +325,13 @@ function renderChannels(){
   $("ch-context").innerHTML = `Supply → demand funnel per SSP pipe for <b>${scopeTxt}</b>. Pipes shown as a DSP name are 1:1 connections (Direct/BidSwitch) — the requests ARE that DSP's requests. Reseller pools are the last observable level.`;
   const t = $("ch-tb"); t.innerHTML = "";
   if (!rows.length){
-    t.innerHTML = `<tr><td colspan="11" class="empty">No SSP pipes above the volume floor for this scope.</td></tr>`;
+    t.innerHTML = `<tr><td colspan="12" class="empty">No SSP pipes above the volume floor for this scope.</td></tr>`;
     return;
   }
   rows.forEach(r=>{
     const e = chEntity(r.ch);
     const br = r.rq ? r.b/r.rq : null;
+    const wr = r.b ? r.w/r.b : null;   // demand conversion: wins / bids
     const tr = document.createElement("tr");
     const badge = e.oneToOne
       ? `<span class="badge direct">${esc(e.ct)}</span>`
@@ -340,7 +341,7 @@ function renderChannels(){
       : `<span class="cc">${esc(e.name)}</span>`;
     tr.innerHTML = `<td>${label}</td><td>${badge}</td>
       <td>${fmt(r.rq)}</td><td>${fmt(r.b)}</td><td>${pct(br)}</td>
-      <td>${fmt(r.w)}</td><td>${fmt(r.i)}</td>
+      <td>${fmt(r.w)}</td><td>${pct(wr)}</td><td>${fmt(r.i)}</td>
       <td>${money(r.rv)}</td><td>${money(r.pc)}</td><td>${marginCell(r.rv,r.pc)}</td>`;
     const act = document.createElement("td");
     if (e.oneToOne){
@@ -367,13 +368,13 @@ function renderAdomains(){
   const rows = (adIdx[scope+"|"+state.ch]||[]).slice().sort((a,b)=>b.b-a.b);
   const t = $("ad-tb"); t.innerHTML = "";
   if (!rows.length){
-    t.innerHTML = `<tr><td colspan="4" class="empty">No bids recorded for this DSP in this demand scope over the window — the demand side is fully silent here.</td></tr>`;
+    t.innerHTML = `<tr><td colspan="5" class="empty">No bids recorded for this DSP in this demand scope over the window — the demand side is fully silent here.</td></tr>`;
     return;
   }
   rows.forEach(r=>{
     const tr = document.createElement("tr");
     tr.innerHTML = `<td><span class="cc">${esc(r.a)}</span></td>
-      <td>${fmt(r.b)}</td><td>${fmt(r.i)}</td><td>${money(r.rv)}</td>`;
+      <td>${fmt(r.b)}</td><td>${fmt(r.i)}</td><td>${pct(r.b ? r.i/r.b : null)}</td><td>${money(r.rv)}</td>`;
     t.appendChild(tr);
   });
 }
