@@ -53,8 +53,18 @@ def main() -> None:
 
     geo_text = GEO.read_text(encoding="utf-8").strip()
     html = html.replace("__MAP_GEO__", geo_text)
-    if "__MAP_GEO__" in html or "__" + "MAP_GEO" + "__" in html:
-        raise SystemExit("__MAP_GEO__ placeholder not substituted.")
+
+    # Monthly history for sparklines and the "what changed" strip. Optional:
+    # without data/trends.json the page renders with trend features hidden.
+    trends_path = PROJECT_ROOT / "data" / "trends.json"
+    trends_text = trends_path.read_text(encoding="utf-8").strip() if trends_path.exists() else "null"
+    if trends_text == "null":
+        print("note: data/trends.json missing — run scripts/fetch_trends.py for sparklines")
+    html = html.replace("__TRENDS__", trends_text)
+
+    for ph in ("__MAP_GEO__", "__TRENDS__"):
+        if ph in html:
+            raise SystemExit(f"{ph} placeholder not substituted.")
 
     OUTPUT.write_text(html, encoding="utf-8")
     n = sum(1 for c in payload["countries"] if c.get("c"))

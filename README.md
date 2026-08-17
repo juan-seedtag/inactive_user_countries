@@ -106,14 +106,26 @@ index_v3.html                 map + full dashboard, built on demand (standalone)
 ```
 
 **index_v3** is the map-plus-dashboard variant: a choropleth world map
-(colour by bid rate / requests / revenue / margin, hover tooltips, click a
-country to jump to its table row) sitting on top of the complete dashboard —
-same tabs, drill-downs and footnotes as index.html, same cached payload.
-Rebuild it any time with:
+(colour by bid rate / requests / revenue / margin / a categorical demand-status
+mode, hover tooltips, click a country to jump to its table row) sitting on top
+of the complete dashboard — same tabs, drill-downs and footnotes as index.html,
+same cached payload. On top of that it adds: per-country bid-rate sparklines
+and a "what changed" strip (both fed by `data/trends.json`), request-volume
+bars in the cells, a country search box that also dims the map, a zero-bid
+filter (toggle button + clickable stat tile), a compact-columns toggle, sticky
+tabs, table-row hover highlighting the country on the map, deep links
+(`#s/ge`, `#c/PH`, `#a/PH//<pipe>/<dsp>`), and status pills computed relative
+to the live benchmark median instead of hardcoded thresholds. Rebuild with:
 
 ```bash
-python scripts/build_index_v3.py
+python scripts/fetch_trends.py      # optional: refresh monthly history (Trino)
+python scripts/build_index_v3.py    # cache-only, ~1s
 ```
+
+`fetch_trends.py` pulls per-country monthly requests/bid-rate from
+`ssp_events_monthly_simplified` (same Beachfront-excluded perimeter) into
+`data/trends.json`; without that file the page renders with trend features
+hidden.
 
 It is not wired into the daily GitHub Action; promote it by pointing the
 workflow (or update_dashboard.py's TEMPLATE/OUTPUT) at the v3 template once

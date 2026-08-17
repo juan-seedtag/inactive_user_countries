@@ -3,22 +3,22 @@
 :root{
   --bg:#f7f8f7; --surface:#ffffff; --ink:#1c2321; --muted:#5c6b66; --line:#dde4e1;
   --accent:#0e7a5f; --dead:#b3261e; --dead-bg:#fbeceb; --warn:#8a6d00; --warn-bg:#f7f1dc;
-  --row-hover:#f0f4f2; --detail-bg:#fafcfb; --sea:#eef2f0; --nodata:#d8dedb;
+  --row-hover:#f0f4f2; --detail-bg:#fafcfb; --sea:#eef2f0; --nodata:#d8dedb; --barfill:rgba(14,122,95,.13);
 }
 @media (prefers-color-scheme: dark){:root{
   --bg:#131817; --surface:#1b2220; --ink:#e4ebe8; --muted:#8fa39c; --line:#2b3634;
   --accent:#4dc3a2; --dead:#ff8a80; --dead-bg:#3a2321; --warn:#e0c25a; --warn-bg:#332e1c;
-  --row-hover:#212b28; --detail-bg:#171e1c; --sea:#161d1b; --nodata:#242e2b;
+  --row-hover:#212b28; --detail-bg:#171e1c; --sea:#161d1b; --nodata:#242e2b; --barfill:rgba(77,195,162,.16);
 }}
 :root[data-theme="dark"]{
   --bg:#131817; --surface:#1b2220; --ink:#e4ebe8; --muted:#8fa39c; --line:#2b3634;
   --accent:#4dc3a2; --dead:#ff8a80; --dead-bg:#3a2321; --warn:#e0c25a; --warn-bg:#332e1c;
-  --row-hover:#212b28; --detail-bg:#171e1c; --sea:#161d1b; --nodata:#242e2b;
+  --row-hover:#212b28; --detail-bg:#171e1c; --sea:#161d1b; --nodata:#242e2b; --barfill:rgba(77,195,162,.16);
 }
 :root[data-theme="light"]{
   --bg:#f7f8f7; --surface:#ffffff; --ink:#1c2321; --muted:#5c6b66; --line:#dde4e1;
   --accent:#0e7a5f; --dead:#b3261e; --dead-bg:#fbeceb; --warn:#8a6d00; --warn-bg:#f7f1dc;
-  --row-hover:#f0f4f2; --detail-bg:#fafcfb; --sea:#eef2f0; --nodata:#d8dedb;
+  --row-hover:#f0f4f2; --detail-bg:#fafcfb; --sea:#eef2f0; --nodata:#d8dedb; --barfill:rgba(14,122,95,.13);
 }
 body{background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:2rem 1.5rem 4rem;}
 .wrap{max-width:1080px;margin:0 auto;}
@@ -93,6 +93,22 @@ button.tgl[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);f
 #legend-bar{flex:0 0 220px;height:10px;border-radius:5px;border:1px solid var(--line);}
 .legend .swatch{display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--nodata);border:1px solid var(--line);vertical-align:-2px;margin-right:.3rem;}
 tr.hl{outline:2px solid var(--accent);outline-offset:-2px;}
+.tabs{position:sticky;top:0;background:var(--bg);z-index:4;}
+td.qbar{background-image:linear-gradient(90deg,var(--barfill) var(--w),transparent var(--w));background-repeat:no-repeat;}
+.tdspark{padding:.2rem .5rem;}
+.spark{display:block;}
+input[type=search]{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:.3rem .6rem;font:inherit;font-size:.85rem;min-width:180px;}
+input[type=search]:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+.stat.statbtn{cursor:pointer;}
+.stat.statbtn:hover{background:var(--row-hover);}
+.strip{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:.5rem .8rem;margin:0 0 1rem;font-size:.82rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;}
+.strip .chip{background:var(--detail-bg);border:1px solid var(--line);border-radius:999px;padding:.08rem .6rem;font-variant-numeric:tabular-nums;}
+#map [data-cc].dim{opacity:.22;}
+#map .hov{stroke:var(--ink) !important;stroke-width:1.4 !important;}
+#view-supply.compact th:nth-child(5),#view-supply.compact td:nth-child(5),
+#view-supply.compact th:nth-child(8),#view-supply.compact td:nth-child(8),
+#view-supply.compact th:nth-child(11),#view-supply.compact td:nth-child(11),
+#view-supply.compact th:nth-child(12),#view-supply.compact td:nth-child(12){display:none;}
 section[hidden],[hidden]{display:none;}
 </style>
 <div class="wrap">
@@ -107,6 +123,7 @@ section[hidden],[hidden]{display:none;}
   <button class="tgl" data-metric="rq" aria-pressed="false">Requests</button>
   <button class="tgl" data-metric="rv" aria-pressed="false">Revenue</button>
   <button class="tgl" data-metric="mg" aria-pressed="false">Margin</button>
+  <button class="tgl" data-metric="st" aria-pressed="false">Demand status</button>
 </div>
 <div class="mapwrap">
   <svg id="map" viewBox="0 0 960 410" role="img" aria-label="World map coloured by selected metric"></svg>
@@ -120,11 +137,12 @@ section[hidden],[hidden]{display:none;}
 </div>
 <p class="foot" style="margin:.4rem .25rem 1.25rem">Geometry: Natural Earth 110m (public domain); micro-territories render as dots; <span id="unmapped-note"></span>. Click a country on the map to jump to its row.</p>
 
+<div class="strip" id="changed" hidden></div>
 <div class="tabs" role="tablist" aria-label="Country sections">
   <button class="tab" id="tab-active" role="tab" aria-selected="true" aria-controls="sec-active">Active Markets <span class="tab-n" id="am-n"></span></button>
   <button class="tab" id="tab-geo" role="tab" aria-selected="false" aria-controls="sec-geo">Geo Expansion <span class="tab-n" id="ge-n"></span></button>
 </div>
-<div class="ctrl"><button class="tgl" id="expall">Expand all</button><span class="foot" style="margin:0">Click a country to see its editorial groups (top __TOP_N__ by volume, ≥__DETAIL_FLOOR_LABEL__ requests) · «SSPs →» drills into the demand side</span></div>
+<div class="ctrl"><button class="tgl" id="expall">Expand all</button><button class="tgl" id="compact" aria-pressed="false">Compact columns</button><button class="tgl" id="zeroonly" aria-pressed="false">Zero-bid only</button><input type="search" id="q" placeholder="Filter countries…" aria-label="Filter countries"><span class="foot" style="margin:0">Click a country to see its editorial groups (top __TOP_N__ by volume, ≥__DETAIL_FLOOR_LABEL__ requests) · «SSPs →» drills into the demand side</span></div>
 
 <div id="sec-active" role="tabpanel" aria-labelledby="tab-active">
 <div class="stats">
@@ -132,9 +150,10 @@ section[hidden],[hidden]{display:none;}
   <div class="stat"><div class="k">Requests</div><div class="v" id="am-r"></div></div>
   <div class="stat"><div class="k">Bids</div><div class="v" id="am-b"></div></div>
   <div class="stat"><div class="k">Impressions</div><div class="v" id="am-i"></div></div>
+  <div class="stat statbtn" id="am-zt" role="button" tabindex="0" title="Countries with zero bids this window — click to filter both tables"><div class="k">Zero-bid countries</div><div class="v dead" id="am-z"></div></div>
 </div>
 <div class="tblwrap"><table>
-<thead><tr><th>User country</th><th>Requests</th><th>Bids</th><th>Wins</th><th>Impressions</th><th>Revenue</th><th>Pub cost</th><th>Margin</th><th>Bid rate</th><th>Win rate</th><th>Fill rate</th><th>Status</th><th>Demand</th></tr></thead>
+<thead><tr><th>User country</th><th title="Bid-rate trend by month (monthly events table, same Beachfront-excluded perimeter)">Trend</th><th>Requests</th><th>Bids</th><th>Wins</th><th>Impressions</th><th>Revenue</th><th>Pub cost</th><th>Margin</th><th>Bid rate</th><th>Win rate</th><th>Fill rate</th><th>Status</th><th>Demand</th></tr></thead>
 <tbody id="tb-active"></tbody>
 </table></div>
 </div>
@@ -145,9 +164,10 @@ section[hidden],[hidden]{display:none;}
   <div class="stat"><div class="k">Requests</div><div class="v dead" id="ge-r"></div></div>
   <div class="stat"><div class="k">Bids</div><div class="v" id="ge-b"></div></div>
   <div class="stat"><div class="k">Impressions</div><div class="v" id="ge-i"></div></div>
+  <div class="stat statbtn" id="ge-zt" role="button" tabindex="0" title="Countries with zero bids this window — click to filter both tables"><div class="k">Zero-bid countries</div><div class="v dead" id="ge-z"></div></div>
 </div>
 <div class="tblwrap"><table>
-<thead><tr><th>User country</th><th>Requests</th><th>Bids</th><th>Wins</th><th>Impressions</th><th>Revenue</th><th>Pub cost</th><th>Margin</th><th>Bid rate</th><th>Win rate</th><th>Fill rate</th><th>Status</th><th>Demand</th></tr></thead>
+<thead><tr><th>User country</th><th title="Bid-rate trend by month (monthly events table, same Beachfront-excluded perimeter)">Trend</th><th>Requests</th><th>Bids</th><th>Wins</th><th>Impressions</th><th>Revenue</th><th>Pub cost</th><th>Margin</th><th>Bid rate</th><th>Win rate</th><th>Fill rate</th><th>Status</th><th>Demand</th></tr></thead>
 <tbody id="tb-geo"></tbody>
 </table></div>
 </div>
@@ -179,10 +199,10 @@ section[hidden],[hidden]{display:none;}
 const DATA = __PAYLOAD__;
 const NAMES = {VE:"Venezuela",BF:"Burkina Faso",CN:"China",BJ:"Benin",IQ:"Iraq",FO:"Faroe Islands",NI:"Nicaragua",TD:"Chad",LB:"Lebanon",SL:"Sierra Leone",BY:"Belarus",AF:"Afghanistan",SD:"Sudan",MM:"Myanmar",ZW:"Zimbabwe",GH:"Ghana",MW:"Malawi",NA:"Namibia",CU:"Cuba",SY:"Syria",IR:"Iran",KP:"North Korea",ML:"Mali",NE:"Niger",GN:"Guinea",TG:"Togo",HT:"Haiti",YE:"Yemen",LY:"Libya",SO:"Somalia",ER:"Eritrea",TJ:"Tajikistan",TM:"Turkmenistan",GW:"Guinea-Bissau",CF:"Central African Rep.",CD:"DR Congo",CG:"Congo",BI:"Burundi",MR:"Mauritania",LR:"Liberia",GM:"Gambia",SS:"South Sudan",DJ:"Djibouti",KM:"Comoros",ET:"Ethiopia",RW:"Rwanda",MG:"Madagascar",MZ:"Mozambique",AO:"Angola",ZM:"Zambia",UG:"Uganda",TZ:"Tanzania",PG:"Papua New Guinea",LA:"Laos",KH:"Cambodia",BT:"Bhutan",MV:"Maldives",FJ:"Fiji",VU:"Vanuatu",WS:"Samoa",TO:"Tonga",SB:"Solomon Islands",TL:"Timor-Leste",SR:"Suriname",GY:"Guyana",BO:"Bolivia",PY:"Paraguay",HN:"Honduras",GT:"Guatemala",SV:"El Salvador",MX:"Mexico",RU:"Russia",UA:"Ukraine",MD:"Moldova",AM:"Armenia",AZ:"Azerbaijan",GE:"Georgia",UZ:"Uzbekistan",KG:"Kyrgyzstan",KZ:"Kazakhstan",MN:"Mongolia",NP:"Nepal",BD:"Bangladesh",LK:"Sri Lanka",PK:"Pakistan",DZ:"Algeria",MA:"Morocco",TN:"Tunisia",EG:"Egypt",JO:"Jordan",PS:"Palestine",OM:"Oman",KW:"Kuwait",BH:"Bahrain",QA:"Qatar",SA:"Saudi Arabia",AE:"UAE",IL:"Israel",TR:"Türkiye",CI:"Côte d’Ivoire",SN:"Senegal",CM:"Cameroon",GA:"Gabon",GQ:"Eq. Guinea",ST:"São Tomé",CV:"Cabo Verde",BW:"Botswana",LS:"Lesotho",SZ:"Eswatini",AL:"Albania",MK:"North Macedonia",BA:"Bosnia",RS:"Serbia",ME:"Montenegro",XK:"Kosovo",PH:"Philippines",TH:"Thailand",IN:"India",ID:"Indonesia",MY:"Malaysia",VN:"Vietnam",KR:"South Korea",TW:"Taiwan",JP:"Japan",HK:"Hong Kong",SG:"Singapore",NG:"Nigeria",KE:"Kenya",ZA:"South Africa",EG:"Egypt",US:"United States",CA:"Canada",FR:"France",DE:"Germany",ES:"Spain",IT:"Italy",GB:"United Kingdom",NL:"Netherlands",BE:"Belgium",PT:"Portugal",BR:"Brazil",AR:"Argentina",CL:"Chile",CO:"Colombia",PE:"Peru",EC:"Ecuador",UY:"Uruguay",AU:"Australia",NZ:"New Zealand",AQ:"Antarctica",KI:"Kiribati",PW:"Palau",TK:"Tokelau",TV:"Tuvalu",VC:"St. Vincent",NC:"New Caledonia",PM:"St. Pierre & Miquelon",NU:"Niue",GU:"Guam",BL:"St. Barthélemy",AW:"Aruba",IM:"Isle of Man",WF:"Wallis & Futuna",RE:"Réunion",MO:"Macao",PF:"Fr. Polynesia",TT:"Trinidad & Tobago",BM:"Bermuda",GG:"Guernsey",JE:"Jersey",MP:"N. Mariana Is.",AX:"Åland",MU:"Mauritius",DM:"Dominica",LC:"St. Lucia",AI:"Anguilla",GL:"Greenland",TC:"Turks & Caicos",FM:"Micronesia",BZ:"Belize",CK:"Cook Islands",NR:"Nauru",SJ:"Svalbard",GD:"Grenada",SX:"Sint Maarten",IS:"Iceland",BN:"Brunei",MF:"St. Martin",MS:"Montserrat",MQ:"Martinique",MH:"Marshall Is.",MT:"Malta",GF:"Fr. Guiana",MC:"Monaco",AG:"Antigua",BB:"Barbados",AD:"Andorra",VG:"Br. Virgin Is.",KN:"St. Kitts",BD:"Bangladesh",BS:"Bahamas",GP:"Guadeloupe",KY:"Cayman Is.",YT:"Mayotte",CW:"Curaçao",SC:"Seychelles",AS:"Am. Samoa",GI:"Gibraltar",FK:"Falkland Is.",DO:"Dominican Rep.",BQ:"Bonaire",VI:"US Virgin Is.",CY:"Cyprus",GR:"Greece",LT:"Lithuania",PR:"Puerto Rico",SM:"San Marino",VA:"Vatican",EE:"Estonia",JM:"Jamaica",IO:"Br. Indian Ocean Terr.",UM:"US Minor Is.",SH:"St. Helena",PN:"Pitcairn",GS:"S. Georgia",EH:"W. Sahara",NF:"Norfolk Is.",CC:"Cocos Is.",LI:"Liechtenstein",LU:"Luxembourg",MQ:"Martinique",HR:"Croatia",BG:"Bulgaria",RO:"Romania",HU:"Hungary",CZ:"Czechia",SK:"Slovakia",SI:"Slovenia",AT:"Austria",CH:"Switzerland",DK:"Denmark",SE:"Sweden",NO:"Norway",FI:"Finland",IE:"Ireland",LV:"Latvia",QA:"Qatar",PA:"Panama",CR:"Costa Rica"};
 const fmt = n => n>=1e9 ? (n/1e9).toFixed(2)+"B" : n>=1e6 ? (n/1e6).toFixed(1)+"M" : n>=1e3 ? (n/1e3).toFixed(1)+"K" : String(n);
-const pct = v => v==null ? "–" : (v*100).toFixed(v*100<0.01?4:3)+"%";
+const pct = v => v==null ? "–" : v===0 ? "0%" : (v*100).toFixed(v*100<0.01?4:3)+"%";
 const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
 // Inactive countries earn dollars, not millions — keep small values readable.
-const money = v => v==null ? "–" :
+const money = v => v==null ? "–" : v===0 ? "$0" :
   "$"+(v>=1000 ? Math.round(v).toLocaleString("en-US") : v>=100 ? v.toFixed(0) : v.toFixed(2));
 // Margin % from revenue/publisher-cost; red when the traffic loses money.
 function marginCell(rv, pc){
@@ -225,6 +245,7 @@ function show(state_){
   renderCrumbs();
   if (state.view==="channels") renderChannels();
   if (state.view==="adomains") renderAdomains();
+  syncHash();
   window.scrollTo({top:0});
 }
 function renderCrumbs(){
@@ -247,6 +268,46 @@ function renderCrumbs(){
   const scopeLabel = cname(state.c) + (state.g!==undefined && state.g!==null ? " / "+state.g : "");
   if (state.view==="channels"){ put(scopeLabel, null); }
   else { put(scopeLabel, {view:"channels", c:state.c, g:state.g}); sep(); put(state.dsp, null); }
+}
+
+
+// --- Cross-cutting: trends, benchmark median, filters, deep links -----------
+const TRENDS = __TRENDS__;   // {months:[...], countries:{CC:{rq:[],br:[]}}} or null
+const bmSorted = (DATA.meta.benchmarks||[]).map(b=>b.br).filter(v=>v!=null).sort((a,b)=>a-b);
+const BENCH_MED = bmSorted.length ? bmSorted[Math.floor(bmSorted.length/2)] : 0.02;
+let qStr = "", zeroOnly = false;
+function barW(v, mx){
+  const mn = 1e6;                       // request floor = zero-width baseline
+  if (v<=mn || mx<=mn) return 2;
+  return Math.max(2, Math.min(100, 100*Math.log(v/mn)/Math.log(mx/mn)));
+}
+function spark(cc){
+  if (!TRENDS || !TRENDS.countries[cc]) return "";
+  const vals = TRENDS.countries[cc].br;
+  const nums = vals.filter(v=>v!=null);
+  if (nums.length<2) return "";
+  const mx = Math.max(...nums), mn = Math.min(...nums);
+  const W=64, H=18, P=2, pts=[];
+  vals.forEach((v,i)=>{
+    if (v==null) return;
+    const x = P+(W-2*P)*(vals.length===1?0.5:i/(vals.length-1));
+    const y = mx===mn ? H/2 : P+(H-2*P)*(1-(v-mn)/(mx-mn));
+    pts.push([x,y]);
+  });
+  const d = pts.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");
+  const last = pts[pts.length-1];
+  const col = nums[nums.length-1]>=nums[0] ? "var(--accent)" : "var(--dead)";
+  const t = `Bid rate by month, ${TRENDS.months[0]} → ${TRENDS.months[TRENDS.months.length-1]}: ${pct(nums[0])} → ${pct(nums[nums.length-1])}`;
+  return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img"><title>${t}</title><polyline points="${d}" fill="none" stroke="${col}" stroke-width="1.4"/><circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="1.8" fill="${col}"/></svg>`;
+}
+// Deep links: #s/am|ge · #c/CC[/EG] · #a/CC/EG?/CH/DSP (EG empty when country-level)
+function syncHash(){
+  let h;
+  if (state.view==="supply") h = "s/"+($("sec-active").hidden ? "ge" : "am");
+  else if (state.view==="channels")
+    h = "c/"+encodeURIComponent(state.c)+(state.g!=null ? "/"+encodeURIComponent(state.g) : "");
+  else h = "a/"+[state.c, state.g==null ? "" : state.g, state.ch, state.dsp].map(encodeURIComponent).join("/");
+  history.replaceState(null, "", "#"+h);
 }
 
 // --- View 1: supply (countries + editorial groups) --------------------------
@@ -277,31 +338,42 @@ function selectTab(which){
   $("sec-geo").hidden = active;
   $("tab-active").setAttribute("aria-selected", active);
   $("tab-geo").setAttribute("aria-selected", !active);
+  syncHash();
 }
 $("tab-active").addEventListener("click", ()=>selectTab("active"));
 $("tab-geo").addEventListener("click", ()=>selectTab("geo"));
 function renderSection(cs, tbodyId, statPrefix){
   const tb = $(tbodyId);
+  // Section tiles always reflect the whole section, not the current filter.
   $(statPrefix+"-c").textContent = cs.length;
   $(statPrefix+"-r").textContent = fmt(cs.reduce((s,c)=>s+c.rq,0));
   $(statPrefix+"-b").textContent = fmt(cs.reduce((s,c)=>s+c.b,0));
   $(statPrefix+"-i").textContent = fmt(cs.reduce((s,c)=>s+c.i,0));
+  const zc = cs.filter(c=>c.b===0);
+  $(statPrefix+"-z").textContent = zc.length + " · " + fmt(zc.reduce((s,c)=>s+c.rq,0));
+  const barMax = Math.max(1, ...cs.map(c=>c.rq));
+  const qq = qStr.trim().toLowerCase();
+  let list = cs;
+  if (qq) list = list.filter(c=>c.c.toLowerCase().includes(qq) || (NAMES[c.c]||"").toLowerCase().includes(qq));
+  if (zeroOnly) list = list.filter(c=>c.b===0);
   tb.innerHTML = "";
-  if (!cs.length){
-    tb.innerHTML = `<tr><td colspan="13" class="empty">No countries above the volume floor in this section for this window.</td></tr>`;
+  if (!list.length){
+    tb.innerHTML = `<tr><td colspan="14" class="empty">${cs.length ? "No countries match the current filter in this section." : "No countries above the volume floor in this section for this window."}</td></tr>`;
     return;
   }
-  cs.forEach(c=>{
+  list.forEach(c=>{
     const tr = document.createElement("tr");
     tr.className = "country"; tr.tabIndex = 0;
     tr.id = "row-"+statPrefix+"-"+c.c;   // map click-through target
     tr.setAttribute("role","button"); tr.setAttribute("aria-expanded","false");
+    // Relative to the live benchmark median, not a hardcoded threshold era.
     const status = c.b===0 ? '<span class="pill dead">No bids</span>'
-      : c.br<0.001 ? '<span class="pill dead">Near zero</span>'
-      : c.br<0.009 ? '<span class="pill low">Very low</span>'
+      : c.br<0.05*BENCH_MED ? '<span class="pill dead">Near zero</span>'
+      : c.br<0.5*BENCH_MED ? '<span class="pill low">Below par</span>'
       : '<span class="pill ok">Active</span>';
     tr.innerHTML = `<td><span class="chev">▸</span><span class="cc">${esc(c.c)}</span><span class="cname">${NAMES[c.c]||""}</span></td>
-      <td>${fmt(c.rq)}</td><td>${fmt(c.b)}</td><td>${fmt(c.w)}</td><td>${fmt(c.i)}</td>
+      <td class="tdspark">${spark(c.c)}</td>
+      <td class="qbar" style="--w:${barW(c.rq, barMax).toFixed(1)}%">${fmt(c.rq)}</td><td>${fmt(c.b)}</td><td>${fmt(c.w)}</td><td>${fmt(c.i)}</td>
       <td>${money(c.rv)}</td><td>${money(c.pc)}</td><td>${marginCell(c.rv,c.pc)}</td>
       <td>${pct(c.br)}</td><td>${pct(c.wr)}</td><td>${pct(c.fr)}</td><td>${status}</td>`;
     const act = document.createElement("td");
@@ -311,7 +383,7 @@ function renderSection(cs, tbodyId, statPrefix){
     const kids = (byC[c.c]||[]).map(d=>{
       const dr = document.createElement("tr");
       dr.className = "detail"; dr.style.display = "none";
-      dr.innerHTML = `<td>${esc(d.g||"(unknown)")}</td>
+      dr.innerHTML = `<td>${esc(d.g||"(unknown)")}</td><td></td>
         <td>${fmt(d.rq)}</td><td>${fmt(d.b)}</td><td>${fmt(d.w)}</td><td>${fmt(d.i)}</td>
         <td>${money(d.rv)}</td><td>${money(d.pc)}</td><td>${marginCell(d.rv,d.pc)}</td>
         <td>${pct(d.br)}</td><td>${pct(d.wr)}</td><td>${pct(d.fr)}</td><td></td>`;
@@ -330,6 +402,8 @@ function renderSection(cs, tbodyId, statPrefix){
     const toggle = () => setOpen(!tr.classList.contains("open"));
     tr.addEventListener("click", toggle);
     tr.addEventListener("keydown", e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle();}});
+    tr.addEventListener("mouseenter", ()=>{ const el=document.querySelector('#map [data-cc="'+c.c+'"]'); if (el) el.classList.add("hov"); });
+    tr.addEventListener("mouseleave", ()=>{ document.querySelectorAll("#map .hov").forEach(x=>x.classList.remove("hov")); });
   });
 }
 document.getElementById("expall").addEventListener("click", ()=>{
@@ -451,6 +525,7 @@ const METRICS = {
        domain:vs=>[Math.max(0.01,vs[0]), vs[vs.length-1]], scale:"log"},
   mg: {name:"Margin",   value:r=>r.mg, label:pct,
        domain:()=>[-1,1], scale:"diverging"},
+  st: {name:"Demand status", value:r=>r.br, label:v=>"", domain:()=>[0,1], scale:"cat"},
 };
 let metric = "br";
 
@@ -473,6 +548,24 @@ function colourFor(v, dom, kind, cols){
 
 function paint(){
   const m = METRICS[metric];
+  if (m.scale==="cat"){
+    // Categorical: where is demand broken? Bands are relative to the live
+    // benchmark median so the map never fossilizes a threshold.
+    const cDead=css("--dead"), cWarn=css("--warn"), cOk=css("--accent");
+    document.querySelectorAll("#map [data-cc]").forEach(el=>{
+      const r = byCC[el.dataset.cc];
+      let col = null;
+      if (r) col = (r.b===0 || r.br<0.05*BENCH_MED) ? cDead
+                 : (r.br<0.5*BENCH_MED) ? cWarn : cOk;
+      el.classList.toggle("nodata", !col);
+      if (col) el.style.fill = col; else el.style.removeProperty("fill");
+    });
+    $("legend-bar").style.background =
+      `linear-gradient(90deg, ${cDead} 0%, ${cDead} 33%, ${cWarn} 33%, ${cWarn} 66%, ${cOk} 66%, ${cOk} 100%)`;
+    $("legend-min").textContent = "zero / near-zero bids";
+    $("legend-max").textContent = "healthy vs benchmark median "+pct(BENCH_MED);
+    return;
+  }
   const cols = {
     low: lerp(hexToRgb(css("--dead")), hexToRgb(css("--surface")||"#ffffff"), 0.55),
     high: hexToRgb(css("--accent")),
@@ -569,4 +662,63 @@ document.querySelectorAll("[data-metric]").forEach(b=>{
 new MutationObserver(paint).observe(document.documentElement, {attributes:true, attributeFilter:["data-theme"]});
 if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", paint);
 paint();
+
+// --- Search / zero-bid filter / compact columns ------------------------------
+function applyMapDim(){
+  const qq = qStr.trim().toLowerCase();
+  document.querySelectorAll("#map [data-cc]").forEach(el=>{
+    const cc = el.dataset.cc, r = byCC[cc];
+    let dim = false;
+    if (qq) dim = !(cc.toLowerCase().includes(qq) || (NAMES[cc]||"").toLowerCase().includes(qq));
+    if (!dim && zeroOnly) dim = !(r && r.b===0);
+    el.classList.toggle("dim", dim);
+  });
+}
+$("q").addEventListener("input", e=>{ qStr = e.target.value; render(); applyMapDim(); });
+function setZero(on){
+  zeroOnly = on;
+  $("zeroonly").setAttribute("aria-pressed", on);
+  render(); applyMapDim();
+}
+$("zeroonly").addEventListener("click", ()=>setZero(!zeroOnly));
+["am","ge"].forEach(p=>{
+  const t = $(p+"-zt");
+  t.addEventListener("click", ()=>setZero(!zeroOnly));
+  t.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); setZero(!zeroOnly); } });
+});
+$("compact").addEventListener("click", ()=>{
+  const on = $("view-supply").classList.toggle("compact");
+  $("compact").setAttribute("aria-pressed", on);
+  $("compact").textContent = on ? "All columns" : "Compact columns";
+});
+
+// --- "What changed" strip (needs the monthly trends file) --------------------
+(function(){
+  if (!TRENDS || TRENDS.months.length<2) return;
+  const ms = TRENDS.months, n = ms.length, chips = [];
+  const crossed = [], movers = [];
+  Object.entries(TRENDS.countries).forEach(([cc,t])=>{
+    const rqL=t.rq[n-1], rqP=t.rq[n-2], brL=t.br[n-1], brP=t.br[n-2];
+    if (rqL!=null && rqL>=1e6 && (rqP==null || rqP<1e6)) crossed.push(cc);
+    if (brL!=null && brP!=null && rqL!=null && rqL>=1e8) movers.push([cc, brL-brP]);
+  });
+  movers.sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+  if (crossed.length) chips.push(`${crossed.length} ${crossed.length===1?"country":"countries"} crossed 1M monthly requests${crossed.length<=6?" ("+crossed.join(", ")+")":""}`);
+  movers.slice(0,3).forEach(([cc,d])=>chips.push(`${cc} bid rate ${(d>=0?"+":"")+(d*100).toFixed(2)}pp`));
+  if (!chips.length) return;
+  const el = $("changed"); el.hidden = false;
+  el.innerHTML = `<b>What changed (${ms[n-1]} vs ${ms[n-2]}):</b> ` + chips.map(c=>`<span class="chip">${esc(c)}</span>`).join(" ");
+})();
+
+// --- Deep link: apply #s/am|ge, #c/CC[/EG], #a/CC/EG?/CH/DSP on load ----------
+(function(){
+  const h = location.hash.slice(1);
+  if (!h) return;
+  const parts = h.split("/").map(decodeURIComponent);
+  try {
+    if (parts[0]==="s") selectTab(parts[1]==="ge" ? "geo" : "active");
+    else if (parts[0]==="c") show({view:"channels", c:parts[1], g:(parts[2]!==undefined && parts[2]!=="") ? parts[2] : null});
+    else if (parts[0]==="a") show({view:"adomains", c:parts[1], g:parts[2]==="" ? null : parts[2], ch:parts[3], dsp:parts[4]});
+  } catch(err) { /* malformed hash: land on the default view */ }
+})();
 </script>
