@@ -1,14 +1,16 @@
-# Inactive user countries — SSP supply health
+# User countries — SSP supply health
 
-Daily dashboard of user countries where demand barely responds to our supply,
-drilled down to the editorial groups inside each country — and from there into
+Daily dashboard of every user country's supply funnel, split into **Active
+Markets** (the fixed commercial footprint) and **Geo Expansion** (everywhere
+else), drilled down to the editorial groups inside each country — and from there into
 the demand side: which SSP pipes carry the traffic, which of them are 1:1 DSP
 connections, and which brands those DSPs actually bid.
 
 ## The drill (left → right)
 
-1. **Countries + editorial groups** (landing view) — supply funnel per inactive
-   country; expanding a row shows its top editorial groups. «SSPs →» moves right.
+1. **Countries + editorial groups** (landing view) — supply funnel per
+   country, in two sections (Active Markets, then Geo Expansion); expanding a
+   row shows its top editorial groups. «SSPs →» moves right.
 2. **SSP pipes** — the same funnel per channel inside the selected country (or
    editorial group). A pipe that carried exactly one DSP over the window
    (Direct or BidSwitch) **and no unattributable traffic** is displayed as that
@@ -34,7 +36,7 @@ monthly-average FX, publisher grain only).
 (`analytics.etl_ssp_responses_daily_enriched`) buckets `user_country` into 19
 key markets + `'Others'` — the bucketing is a hardcoded CASE in the dbt model
 `stg_ssp_responses_hourly.sql`, applied at aggregation time, so long-tail
-detail is unrecoverable. Brand data is exact for inactive countries that are
+detail is unrecoverable. Brand data is exact for countries that are
 key markets (e.g. IN) and an explicitly-labeled long-tail proxy for the rest.
 Adding countries to that CASE (dbt PR; precedent: de_dbt_lakehouse#743) would
 make them exact from the deploy date forward.
@@ -42,22 +44,22 @@ make them exact from the deploy date forward.
 `index.html` is regenerated every morning by GitHub Actions and committed back
 to the repo. Open it directly, or serve it with GitHub Pages.
 
-## What "inactive" means
+## The two sections
 
-A user country is inactive when, over the window (a trailing **30 closed
-days** by default, so the flag reads a monthly rate rather than one noisy
-week):
+There is **no inactivity threshold**. Every user country with at least **1 M
+requests** over the window (a trailing **30 closed days** by default, so rates
+read as monthly, not one noisy week) appears, split by `ACTIVE_MARKETS` in
+`scripts/update_dashboard.py`:
 
-| Rule | Value | Why |
-|---|---|---|
-| Bid rate below | **0.8 %** | Under the biggest diluted markets on a monthly window (US ~0.91 %), which stay off the list, while catching FR (~0.75 %) and everything genuinely weak below it. TR/SG/HK float above this line and ride in on the watchlist instead. |
+| Section | Membership |
+|---|---|
+| **Active Markets** | US, MX, BR, AR, CO, ES, FR, IT, GB, DE, NL, AE — the fixed commercial footprint |
+| **Geo Expansion** | Every other user country above the request floor |
 
-A **watchlist** (`WATCHLIST` in `scripts/update_dashboard.py`, currently TR,
-SG, HK) pins countries onto the list regardless of their bid rate. They render
-with a "Watchlist" pill when they are above the threshold, so the page never
-implies they met it — this exists for markets someone wants to keep an eye on
-even in weeks when their rate floats above the line.
-| Minimum requests | **1 M** | Below this the rate is noise, not signal |
+Membership is decided in the generator, not in SQL, so the sections can be
+re-cut from `data/latest.json` with `--from-cache` without re-scanning the
+warehouse. Status pills are informational only (No bids / Near zero / Very
+low < 0.9 % / Active) and do not filter anything.
 
 Editorial-group detail shows the **top 15** groups per country with at least
 **100 K** requests.
@@ -65,29 +67,28 @@ Editorial-group detail shows the **top 15** groups per country with at least
 **Beachfront is excluded from every supply scan** (`source_type` and
 `channel_id` both `IS DISTINCT FROM 'Beachfront'`). Beachfront is CTV supply
 sharing the same events table, and it is large: ~43.7 B requests on 2026-08-05
-alone, with near-zero web bids. Leaving it in inflated per-country request
-volume and dragged bid rate down, pushing countries under the threshold on CTV
-volume rather than on genuine web inactivity. The demand table already excludes
-it, so including it on the supply side compared two different perimeters. Some
-countries legitimately drop off the list as a result.
+alone, with near-zero web bids. Leaving it in inflates per-country request
+volume and drags bid rate down, misstating CTV volume as weak web demand. The
+demand table already excludes it, so including it on the supply side would
+compare two different perimeters.
 
 The geo filter also requires `length(user_country) = 2` — alongside `''`,
 `'undefined'` and `NULL`, this column has carried corrupted binary values in
 production.
 
 The page footer prints live bid rates for US, FR, ES, GB and DE over the same
-window, so the threshold can always be read against real reference points
-rather than numbers that were true on the day the page was written. All four
-values live in `scripts/update_dashboard.py` — change them there and both the
-SQL and the page follow, since the page reads its thresholds out of the
-embedded payload.
+window, so every rate on the page can be read against real reference points
+rather than numbers that were true on the day the page was written. Section
+membership and the floors live in `scripts/update_dashboard.py` — change them
+there and both the SQL and the page follow, since the page reads its
+configuration out of the embedded payload.
 
 ## Layout
 
 ```
 scripts/update_dashboard.py   query -> render -> index.html
 scripts/trino_client.py       Trino connection (shared Seedtag pattern, unmodified)
-sql/inactive_countries.sql    phase 1: the inactive-country list (cheap, one grain)
+sql/inactive_countries.sql    phase 1: all countries above the floor (cheap, one grain)
 sql/country_drill.sql         phase 2: EG + country x SSP + EG x SSP in ONE scan,
                               filtered to the phase-1 countries
 sql/channel_mapping.sql       phase 3a: channel -> DSP identity
@@ -95,12 +96,31 @@ sql/channel_mapping.sql       phase 3a: channel -> DSP identity
 sql/adomain_detail.sql        phase 3b: top brands per demand scope x channel
 sql/benchmarks.sql            bid rate for reference markets
 template/dashboard.html       page body with __PLACEHOLDER__ slots
+template/dashboard_v3.html    dashboard.html + world-map graft (see index_v3)
+template/world_map_paths.json Natural Earth 110m geometry, ISO2-keyed (one-time,
+                              regenerate with scripts/build_world_map.py)
+scripts/build_index_v3.py     cache -> index_v3.html (map + full dashboard)
 data/latest.json              last successful query result (cached, committed)
 index.html                    generated output (committed)
+index_v3.html                 map + full dashboard, built on demand (standalone)
 ```
 
+**index_v3** is the map-plus-dashboard variant: a choropleth world map
+(colour by bid rate / requests / revenue / margin, hover tooltips, click a
+country to jump to its table row) sitting on top of the complete dashboard —
+same tabs, drill-downs and footnotes as index.html, same cached payload.
+Rebuild it any time with:
+
+```bash
+python scripts/build_index_v3.py
+```
+
+It is not wired into the daily GitHub Action; promote it by pointing the
+workflow (or update_dashboard.py's TEMPLATE/OUTPUT) at the v3 template once
+it has proven out.
+
 The two-phase shape is deliberate: phase 1 pays one country-grain scan to find
-the ~170 inactive countries, and everything heavier is filtered to that list,
+the ~230 countries above the floor, and everything heavier is filtered to that list,
 which keeps the group-by/shuffle small. All supply drill grains share a single
 scan (`country_drill.sql` UNION ALL of pre-aggregated CTEs) — never one query
 per grain.
