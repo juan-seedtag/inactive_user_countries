@@ -11,7 +11,7 @@ on:
       days:
         description: 'Window length in closed days'
         required: false
-        default: '7'
+        default: '30'
       end_date:
         description: 'Last day of the window (YYYY-MM-DD, blank = yesterday)'
         required: false
