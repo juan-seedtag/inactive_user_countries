@@ -7,6 +7,7 @@ build_world_map.py) and template/dashboard_v3.html.
 
     python scripts/build_index_v3.py
     python scripts/build_index_v3.py --cache data/latest.json
+    python scripts/build_index_v3.py --upload   # also update the Drive copy
 
 The v3 template is dashboard.html plus the map graft, so all 12 standard
 placeholders apply; rather than duplicating the substitution logic we point
@@ -25,6 +26,13 @@ TEMPLATE = PROJECT_ROOT / "template" / "dashboard_v3.html"
 GEO = PROJECT_ROOT / "template" / "world_map_paths.json"
 OUTPUT = PROJECT_ROOT / "index_v3.html"
 
+# Drive copy served by the team's Apps Script viewer link, which is pinned to
+# this fileId — update in place, never create a new file (new id = dead link).
+import os
+
+DRIVE_SA_JSON = os.getenv("DRIVE_SA_JSON", "drive_sa.json")
+DRIVE_FILE_ID = os.getenv("DRIVE_FILE_ID", "14w2abjXBC6ynF7UhUKKs4AsA-sHenllZ")
+
 import sys
 
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
@@ -34,6 +42,12 @@ import update_dashboard as ud
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--cache", type=Path, default=PROJECT_ROOT / "data" / "latest.json")
+    ap.add_argument(
+        "--upload",
+        action="store_true",
+        help="after building, update the Drive copy (fileId %s) in place"
+        % DRIVE_FILE_ID,
+    )
     args = ap.parse_args()
 
     if not args.cache.exists():
@@ -72,6 +86,11 @@ def main() -> None:
         f"Wrote {OUTPUT.relative_to(PROJECT_ROOT)} — {n} countries, "
         f"{OUTPUT.stat().st_size / 1024:.0f} KB"
     )
+
+    if args.upload:
+        from drive_upload import update_file
+
+        update_file(DRIVE_SA_JSON, DRIVE_FILE_ID, OUTPUT)
 
 
 if __name__ == "__main__":

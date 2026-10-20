@@ -42,12 +42,20 @@ jobs:
       - name: Write credentials
         env:
           GOOGLE_TOKEN: ${{ secrets.GOOGLE_TOKEN }}
+          DRIVE_SA: ${{ secrets.DRIVE_SA }}
         run: |
           if [ -z "$GOOGLE_TOKEN" ]; then
             echo "::error::GOOGLE_TOKEN secret is empty — cannot authenticate to Trino."
             exit 1
           fi
           printf '%s' "$GOOGLE_TOKEN" > token.json
+          # Drive creds are optional: without them the v3 step builds the page
+          # but skips updating the Drive copy served by the Apps Script link.
+          if [ -n "$DRIVE_SA" ]; then
+            printf '%s' "$DRIVE_SA" > drive_sa.json
+          else
+            echo "::warning::DRIVE_SA secret is empty — the Drive copy of index_v3 will not be updated."
+          fi
 
       - name: Rebuild dashboard from Trino
         env:
@@ -63,15 +71,27 @@ jobs:
           fi
           python scripts/update_dashboard.py "${args[@]}"
 
+      - name: Rebuild index_v3 and update its Drive copy
+        # The map page is secondary: a failure here must not block the main
+        # dashboard's commit below.
+        continue-on-error: true
+        env:
+          TRINO_USER: ${{ secrets.TRINO_USER }}
+          DRIVE_SA_JSON: drive_sa.json
+        run: |
+          python scripts/fetch_trends.py
+          python scripts/build_index_v3.py --upload
+
       - name: Remove credentials
         if: always()
-        run: rm -f token.json
+        run: rm -f token.json drive_sa.json
 
       - name: Commit refreshed dashboard
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html data/latest.json
+          git add --ignore-errors index_v3.html data/trends.json || true
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else

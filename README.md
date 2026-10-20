@@ -177,10 +177,28 @@ repos:
 |---|---|
 | `GOOGLE_TOKEN` | The full contents of your `token.json` |
 | `TRINO_USER` | Your Seedtag email, e.g. `juanperez@seedtag.com` |
+| `DRIVE_SA` *(optional)* | Drive service-account JSON (`~/.config/seedtag/prj-jdpa-*.json`, same value as the magnite/publisher_pnl secret) — enables updating the Drive copy of index_v3 |
 
-The job writes `token.json` from the secret, runs the generator, deletes the
-token, then commits `index.html` and `data/latest.json` only if they changed.
-The HTML is also uploaded as a workflow artifact on every run, successful or not.
+The job writes `token.json` from the secret, runs the generator, then rebuilds
+index_v3 (`fetch_trends.py` + `build_index_v3.py --upload`), deletes the
+credentials, and commits `index.html`, `data/latest.json`, `index_v3.html` and
+`data/trends.json` only if they changed. The v3 step is `continue-on-error`:
+its failure never blocks the main dashboard's refresh. The HTML is also
+uploaded as a workflow artifact on every run, successful or not.
+
+### The Drive-served copy of index_v3
+
+The team opens index_v3 through an Apps Script viewer link pinned to Drive
+file `14w2abjXBC6ynF7UhUKKs4AsA-sHenllZ`. `build_index_v3.py --upload` updates
+**that exact fileId in place** (`DRIVE_FILE_ID` env to override), so the link
+never changes. Two requirements, and one warning:
+
+- The service account in `DRIVE_SA` must have **Editor** access to that file
+  (or its parent folder) — it was uploaded manually, so this is a one-time
+  share with the SA's `client_email`.
+- Without `DRIVE_SA`, the step builds the page but logs a skip.
+- **Renaming or trashing the Drive file breaks the Apps Script link** — a new
+  upload gets a new fileId. Nothing in this repo can prevent that.
 
 ### Things that will bite you
 
