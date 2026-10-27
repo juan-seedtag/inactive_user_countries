@@ -24,13 +24,25 @@ connections, and which brands those DSPs actually bid.
    impressions and gross revenue (USD).
 
 **Money columns are operational, not Finance.** Revenue is Seedtag revenue from
-the event stream (USD). **Pub cost is an SSP-side allocation estimate** —
-impression cost + HB net insert cost — and Margin derives from it. True
-publisher payout is defined per publisher, from publisher reports, and never per
-user country; splitting it by the country of the user who saw the ad is
-inherently a proxy. Read Pub cost and Margin as directional, and never
-reconcile them against Finance's Publisher Revenue (publisher-reported, EUR,
-monthly-average FX, publisher grain only).
+the event stream (USD). **Pub cost is the HB net insert cost only** — the
+event stream's single valuation of publisher payout. It matches the supply
+funnel's HB-insert line to the euro and runs ~6 % above actual payout on HB
+traffic. `ssp_impression_cost` is the *same* payout valued a second time on the
+same rows (99.5 % of it co-occurs with HB insert cost): adding it — as this
+dashboard did from Aug 12 to Oct 27 2026 — double-counts and produced
+negative margins on HB-heavy countries (the AU incident).
+
+**Margin is computed on costed revenue only.** Tag-family source types (Tag,
+SingleAdUnitTag, AMP — ~20 % of revenue) carry revenue but no cost in the
+event stream; their payout exists only per publisher in the supply funnel. That
+revenue is excluded from the ratio and shown as a muted "+$X uncosted" suffix,
+so a Tag-heavy editorial group never displays a fabricated ~100 % margin.
+
+True publisher payout is defined per publisher, never per user country;
+splitting it by the country of the user who saw the ad is inherently a proxy.
+Read Pub cost and Margin as directional, and never reconcile them against
+Finance's Publisher Revenue (publisher-reported, EUR, monthly-average FX,
+publisher grain only).
 
 **The 'Others' caveat.** The demand table
 (`analytics.etl_ssp_responses_daily_enriched`) buckets `user_country` into 19

@@ -17,15 +17,24 @@ WITH country AS (
         SUM(COALESCE(seedtag_revenue,
             (ssp_net_imp_paid - COALESCE(ssp_post_auction_discount_amount, 0)
              + COALESCE(curator_margin, 0)) / 1000))    AS revenue_usd,
-        -- Publisher cost: an operational SSP-side ESTIMATE in USD (impression
-        -- cost + HB net insert cost). Both paths compensate publishers and the
-        -- supply funnel books them as separate lines, so both belong here.
-        -- True payout is only ever defined per publisher, from publisher
-        -- reports — never per user country. Splitting it by the country of the
-        -- user who saw the ad is inherently an allocation proxy, so treat this
-        -- as directional and never reconcile it against Finance.
-        SUM(ssp_impression_cost + COALESCE(ssp_hb_net_insert_cost, 0)) / 1000
-                                                        AS publisher_cost_usd
+        -- Revenue on traffic the event stream cannot cost: Tag-family source
+        -- types carry revenue but neither cost field (their payout exists only
+        -- in the supply funnel, per publisher). Margin is computed on the
+        -- costed remainder; this slice is surfaced, never silently mixed in.
+        SUM(CASE WHEN source_type IN ('Tag', 'SingleAdUnitTag', 'Amp')
+                 THEN COALESCE(seedtag_revenue,
+                      (ssp_net_imp_paid - COALESCE(ssp_post_auction_discount_amount, 0)
+                       + COALESCE(curator_margin, 0)) / 1000)
+                 ELSE 0 END)                            AS revenue_uncosted_usd,
+        -- Publisher cost = the HB net insert cost ONLY (USD). ssp_impression_cost
+        -- is a second valuation of the SAME payout on the same rows (99.5% of it
+        -- co-occurs with HB insert cost) — summing both double-counts, which
+        -- is what produced negative margins on HB-heavy countries. The HB field
+        -- matches the supply funnel's HB-insert line to the euro and runs ~6%
+        -- above actual payout on HB traffic. True payout exists only per
+        -- publisher; per user country this is an allocation proxy — directional,
+        -- never to be reconciled against Finance.
+        SUM(COALESCE(ssp_hb_net_insert_cost, 0)) / 1000 AS publisher_cost_usd
     FROM st_datalakehouse.ad_exchange.ssp_events_daily_simplified
     WHERE date BETWEEN DATE '{start_date}' AND DATE '{end_date}'
       -- Beachfront is CTV supply riding the same events table. It carries huge
@@ -52,6 +61,7 @@ SELECT
     wins,
     impressions,
     revenue_usd,
+    revenue_uncosted_usd,
     publisher_cost_usd,
     IF(requests = 0, NULL, bids * 1.0 / requests)        AS bid_rate,
     IF(bids = 0, NULL, wins * 1.0 / bids)                AS win_rate,

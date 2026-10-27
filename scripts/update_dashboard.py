@@ -241,6 +241,7 @@ def slim(r: dict) -> dict:
         "wr": num(r["win_rate"]) if "win_rate" in r else (w / b if b else None),
         "fr": num(r["fill_rate"]) if "fill_rate" in r else (i / rq if rq else None),
         "rv": num(r.get("revenue_usd")),
+        "ru": num(r.get("revenue_uncosted_usd")),
         "pc": num(r.get("publisher_cost_usd")),
     }
 
@@ -256,6 +257,7 @@ def slim_channel(r: dict) -> dict:
         "w": int(r["wins"]),
         "i": int(r["impressions"]),
         "rv": num(r.get("revenue_usd")),
+        "ru": num(r.get("revenue_uncosted_usd")),
         "pc": num(r.get("publisher_cost_usd")),
     }
 

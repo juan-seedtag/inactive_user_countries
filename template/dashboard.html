@@ -61,6 +61,8 @@ button.tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;}
 .cc{font-weight:700;}
 .cname{color:var(--muted);font-weight:400;font-size:.85rem;margin-left:.4rem;}
 .foot{color:var(--muted);font-size:.8rem;font-style:italic;margin-top:1rem;}
+.z{color:var(--muted);font-weight:400;}
+td small{font-size:.72rem;white-space:nowrap;}
 .ctrl{margin:0 0 .75rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;}
 button.tgl{background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:.35rem .8rem;font:inherit;font-size:.82rem;cursor:pointer;}
 button.tgl:hover{background:var(--row-hover);}
@@ -139,7 +141,7 @@ section[hidden]{display:none;}
 </section>
 
 <p class="foot">Source: SSP events daily — all products, user-country grain, __WINDOW_LABEL__. Every user country with ≥__FLOOR_LABEL__ requests over the window is shown; Active Markets is the fixed list (__ACTIVE_MARKETS__), every other country falls under Geo Expansion. Editorial-group detail: top __TOP_N__ per country, ≥__DETAIL_FLOOR_LABEL__ requests. Demand drill: SSP pipes from the same events table; DSP identity and brands from the enriched demand responses table (Beachfront excluded). Reference bid rates (same window): __BENCHMARKS__.</p>
-<p class="foot">Money columns are <b>operational figures in USD from the event stream</b>: Revenue = Seedtag revenue (net paid − post-auction discounts + curator margin); Pub cost = an <b>SSP-side allocation estimate</b> (impression cost + HB net insert cost); Margin = (Revenue − Pub cost) / Revenue. These are the only revenue/cost figures that exist at user-country grain — they do <b>not</b> reconcile with Finance's Publisher Revenue (publisher-reported, EUR, monthly-average FX, publisher grain only). True publisher payout is defined per publisher, never per user country, so splitting it by the viewer's country is a proxy: read Pub cost and Margin as directional only. The Brands view shows revenue from the enriched demand table, a slightly different adjustment basis.</p>
+<p class="foot">Money columns are <b>operational figures in USD from the event stream</b>: Revenue = Seedtag revenue (net paid − post-auction discounts + curator margin); Pub cost = the <b>HB net insert cost</b> only — the event stream's single valuation of publisher payout (it matches the supply funnel's HB-insert line and runs ~6% above actual payout on HB traffic; impression cost is the same payout valued twice and is deliberately not added); Margin = (Revenue − uncosted − Pub cost) / (Revenue − uncosted), where <b>uncosted</b> is Tag / SingleAdUnitTag / AMP revenue that carries no cost in the event stream — shown as a suffix, never folded into the ratio. These are the only revenue/cost figures that exist at user-country grain — they do <b>not</b> reconcile with Finance's Publisher Revenue (publisher-reported, EUR, monthly-average FX, publisher grain only). True publisher payout is defined per publisher, never per user country, so splitting it by the viewer's country is a proxy: read Pub cost and Margin as directional only. The Brands view shows revenue from the enriched demand table, a slightly different adjustment basis.</p>
 <p class="foot">Last refreshed __GENERATED_AT__ · rebuilt daily from Trino by GitHub Actions.</p>
 </div>
 <script>
@@ -152,11 +154,18 @@ const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
 const money = v => v==null ? "–" :
   "$"+(v>=1000 ? Math.round(v).toLocaleString("en-US") : v>=100 ? v.toFixed(0) : v.toFixed(2));
 // Margin % from revenue/publisher-cost; red when the traffic loses money.
-function marginCell(rv, pc){
-  if (rv==null || pc==null || rv===0) return "–";
-  const m = (rv-pc)/rv;
+// Margin on COSTED revenue only: Tag-family traffic (Tag / SingleAdUnitTag /
+// Amp) carries revenue but no cost in the event stream, so it is excluded
+// from the ratio and shown as a muted "+$X uncosted" suffix instead of
+// inflating the margin to ~100%.
+function marginCell(rv, pc, ru){
+  const u = ru || 0, base = (rv==null ? null : rv - u);
+  // Under $1 of costed revenue the ratio is noise (e.g. a 99%-Tag country): show the dash.
+  if (base==null || pc==null || base<1) return u>0 ? `<span class="z" title="revenue is (almost) all uncosted Tag-family traffic — no meaningful margin">– <small>+${money(u)} uncosted</small></span>` : "–";
+  const m = (base-pc)/base;
   const txt = (m*100).toFixed(1)+"%";
-  return m<0 ? `<span class="pill dead">${txt}</span>` : txt;
+  const core = m<0 ? `<span class="pill dead">${txt}</span>` : txt;
+  return u>0 ? `${core} <small class="z" title="Tag-family revenue with no cost in the event stream — excluded from the margin">+${money(u)} uncosted</small>` : core;
 }
 
 // --- Indices ---------------------------------------------------------------
@@ -268,7 +277,7 @@ function renderSection(cs, tbodyId, statPrefix){
       : '<span class="pill ok">Active</span>';
     tr.innerHTML = `<td><span class="chev">▸</span><span class="cc">${esc(c.c)}</span><span class="cname">${NAMES[c.c]||""}</span></td>
       <td>${fmt(c.rq)}</td><td>${fmt(c.b)}</td><td>${fmt(c.w)}</td><td>${fmt(c.i)}</td>
-      <td>${money(c.rv)}</td><td>${money(c.pc)}</td><td>${marginCell(c.rv,c.pc)}</td>
+      <td>${money(c.rv)}</td><td>${money(c.pc)}</td><td>${marginCell(c.rv,c.pc,c.ru)}</td>
       <td>${pct(c.br)}</td><td>${pct(c.wr)}</td><td>${pct(c.fr)}</td><td>${status}</td>`;
     const act = document.createElement("td");
     if (HAS_DRILL && chIdx[c.c]) act.appendChild(drillBtn("SSPs →", ()=>show({view:"channels", c:c.c, g:null})));
@@ -279,7 +288,7 @@ function renderSection(cs, tbodyId, statPrefix){
       dr.className = "detail"; dr.style.display = "none";
       dr.innerHTML = `<td>${esc(d.g||"(unknown)")}</td>
         <td>${fmt(d.rq)}</td><td>${fmt(d.b)}</td><td>${fmt(d.w)}</td><td>${fmt(d.i)}</td>
-        <td>${money(d.rv)}</td><td>${money(d.pc)}</td><td>${marginCell(d.rv,d.pc)}</td>
+        <td>${money(d.rv)}</td><td>${money(d.pc)}</td><td>${marginCell(d.rv,d.pc,d.ru)}</td>
         <td>${pct(d.br)}</td><td>${pct(d.wr)}</td><td>${pct(d.fr)}</td><td></td>`;
       const dact = document.createElement("td");
       if (HAS_DRILL && chIdx[d.c+"|"+d.g]) dact.appendChild(drillBtn("SSPs →", ()=>show({view:"channels", c:d.c, g:d.g})));
@@ -342,7 +351,7 @@ function renderChannels(){
     tr.innerHTML = `<td>${label}</td><td>${badge}</td>
       <td>${fmt(r.rq)}</td><td>${fmt(r.b)}</td><td>${pct(br)}</td>
       <td>${fmt(r.w)}</td><td>${pct(wr)}</td><td>${fmt(r.i)}</td>
-      <td>${money(r.rv)}</td><td>${money(r.pc)}</td><td>${marginCell(r.rv,r.pc)}</td>`;
+      <td>${money(r.rv)}</td><td>${money(r.pc)}</td><td>${marginCell(r.rv,r.pc,r.ru)}</td>`;
     const act = document.createElement("td");
     if (e.oneToOne){
       act.appendChild(drillBtn("Brands →", ()=>show({view:"adomains", c:state.c, g:state.g, ch:r.ch, dsp:e.name})));

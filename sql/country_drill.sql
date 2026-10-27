@@ -15,15 +15,19 @@ WITH base AS (
         SUM(ssp_bids)        AS bids,
         SUM(ssp_wins)        AS wins,
         SUM(ssp_impressions) AS impressions,
-        -- Seedtag operational revenue (USD) and the publisher-cost estimate
-        -- (USD). Same definitions as inactive_countries.sql: publisher cost is
-        -- impression cost + HB net insert cost, an SSP-side allocation proxy —
-        -- true payout exists only per publisher, never per user country.
+        -- Same money definitions as inactive_countries.sql (see the comments
+        -- there): revenue, the Tag-family uncosted slice of it, and publisher
+        -- cost = HB net insert cost only (impression cost is the same payout
+        -- valued twice — never add it).
         SUM(COALESCE(seedtag_revenue,
             (ssp_net_imp_paid - COALESCE(ssp_post_auction_discount_amount, 0)
              + COALESCE(curator_margin, 0)) / 1000))    AS revenue_usd,
-        SUM(ssp_impression_cost + COALESCE(ssp_hb_net_insert_cost, 0)) / 1000
-                                                        AS publisher_cost_usd
+        SUM(CASE WHEN source_type IN ('Tag', 'SingleAdUnitTag', 'Amp')
+                 THEN COALESCE(seedtag_revenue,
+                      (ssp_net_imp_paid - COALESCE(ssp_post_auction_discount_amount, 0)
+                       + COALESCE(curator_margin, 0)) / 1000)
+                 ELSE 0 END)                            AS revenue_uncosted_usd,
+        SUM(COALESCE(ssp_hb_net_insert_cost, 0)) / 1000 AS publisher_cost_usd
     FROM st_datalakehouse.ad_exchange.ssp_events_daily_simplified
     WHERE date BETWEEN DATE '{start_date}' AND DATE '{end_date}'
       AND user_country IN ({country_list})
@@ -41,8 +45,9 @@ eg AS (
         SUM(bids)               AS bids,
         SUM(wins)               AS wins,
         SUM(impressions)        AS impressions,
-        SUM(revenue_usd)        AS revenue_usd,
-        SUM(publisher_cost_usd) AS publisher_cost_usd
+        SUM(revenue_usd)          AS revenue_usd,
+        SUM(revenue_uncosted_usd) AS revenue_uncosted_usd,
+        SUM(publisher_cost_usd)   AS publisher_cost_usd
     FROM base
     GROUP BY user_country, editorial_group_name
     HAVING SUM(requests) >= {detail_floor}
@@ -60,8 +65,9 @@ country_channel AS (
         SUM(bids)               AS bids,
         SUM(wins)               AS wins,
         SUM(impressions)        AS impressions,
-        SUM(revenue_usd)        AS revenue_usd,
-        SUM(publisher_cost_usd) AS publisher_cost_usd
+        SUM(revenue_usd)          AS revenue_usd,
+        SUM(revenue_uncosted_usd) AS revenue_uncosted_usd,
+        SUM(publisher_cost_usd)   AS publisher_cost_usd
     FROM base
     WHERE channel_id IS NOT NULL
     GROUP BY user_country, channel_id
@@ -78,7 +84,7 @@ eg_channel AS (
         b.editorial_group_name,
         b.channel_id,
         b.requests, b.bids, b.wins, b.impressions,
-        b.revenue_usd, b.publisher_cost_usd,
+        b.revenue_usd, b.revenue_uncosted_usd, b.publisher_cost_usd,
         ROW_NUMBER() OVER (
             PARTITION BY b.user_country, b.editorial_group_name
             ORDER BY b.requests DESC
@@ -97,7 +103,7 @@ SELECT
     editorial_group_name,
     CAST(NULL AS VARCHAR) AS channel_id,
     requests, bids, wins, impressions,
-    revenue_usd, publisher_cost_usd
+    revenue_usd, revenue_uncosted_usd, publisher_cost_usd
 FROM eg_ranked
 WHERE rn <= {top_n}
 UNION ALL
@@ -107,7 +113,7 @@ SELECT
     CAST(NULL AS VARCHAR),
     channel_id,
     requests, bids, wins, impressions,
-    revenue_usd, publisher_cost_usd
+    revenue_usd, revenue_uncosted_usd, publisher_cost_usd
 FROM cc_ranked
 WHERE rn <= {channel_top_n}
 UNION ALL
@@ -117,7 +123,7 @@ SELECT
     editorial_group_name,
     channel_id,
     requests, bids, wins, impressions,
-    revenue_usd, publisher_cost_usd
+    revenue_usd, revenue_uncosted_usd, publisher_cost_usd
 FROM eg_channel
 WHERE rn <= {channel_top_n}
 ORDER BY level, user_country, requests DESC
