@@ -92,6 +92,27 @@ def window(end_date: date | None, days: int) -> tuple[date, date]:
     return end - timedelta(days=days - 1), end
 
 
+def month_add(d: date, n: int) -> date:
+    y, m = divmod(d.year * 12 + d.month - 1 + n, 12)
+    return date(y, m + 1, 1)
+
+
+def last_complete_month(end: date) -> date:
+    """First day of the month BEFORE the window's end month.
+
+    The monthly table only has whole months; the end month is still open.
+    """
+    return month_add(end.replace(day=1), -1)
+
+
+def slim_month(r: dict) -> dict:
+    return {
+        "rq": int(r["requests"]), "b": int(r["bids"]), "i": int(r["impressions"]),
+        "rv": num(r.get("revenue_usd")), "ru": num(r.get("revenue_uncosted_usd")),
+        "pc": num(r.get("publisher_cost_usd")),
+    }
+
+
 def load_sql(name: str, **params) -> str:
     return (SQL_DIR / name).read_text(encoding="utf-8").format(**params)
 
@@ -176,6 +197,37 @@ def fetch(start: date, end: date) -> dict:
     bench = run_trino_query(bench_sql)
     print(f"  {len(bench)} benchmark rows", flush=True)
 
+    # Phase 4 — MoM / YoY on the last complete calendar month, from the
+    # monthly rollup. Country grain over three partitions: seconds. Guarded:
+    # if the month before the window's end month is not materialised yet,
+    # fall back to the latest one that is.
+    m0 = last_complete_month(end)
+    mx = run_trino_query(
+        "SELECT max(date) AS mx FROM st_datalakehouse.ad_exchange.ssp_events_monthly_simplified "
+        f"WHERE date <= DATE '{m0.isoformat()}'"
+    )[0]["mx"]
+    compare = None
+    if mx is not None:
+        m0 = mx if isinstance(mx, date) else date.fromisoformat(str(mx)[:10])
+        m1, m12 = month_add(m0, -1), month_add(m0, -12)
+        cmp_sql = load_sql(
+            "monthly_compare.sql",
+            months=", ".join(f"DATE '{d.isoformat()}'" for d in (m0, m1, m12)),
+            country_list=", ".join(f"'{c['c']}'" for c in countries),
+            **common,
+        )
+        print(f"Phase 4: MoM/YoY months {m0:%Y-%m} vs {m1:%Y-%m} / {m12:%Y-%m}…", flush=True)
+        cmp_rows = run_trino_query(cmp_sql)
+        print(f"  {len(cmp_rows)} country-month rows", flush=True)
+        by = {}
+        for r in cmp_rows:
+            by.setdefault(r["user_country"], {})[r["ym"]] = slim_month(r)
+        key = {"m": f"{m0:%Y-%m}", "p": f"{m1:%Y-%m}", "y": f"{m12:%Y-%m}"}
+        for c in countries:
+            months = by.get(c["c"], {})
+            c["cmp"] = {k: months.get(ym) for k, ym in key.items()}
+        compare = {"month": key["m"], "prev": key["p"], "yoy": key["y"]}
+
     return {
         "meta": {
             "start_date": start.isoformat(),
@@ -194,6 +246,7 @@ def fetch(start: date, end: date) -> dict:
             "channel_top_n": CHANNEL_TOP_N,
             "adomain_top_n": ADOMAIN_TOP_N,
             "key_markets": DEMAND_KEY_MARKETS,
+            "compare": compare,
         },
         "countries": countries,
         "details": details,
@@ -288,6 +341,20 @@ def month_day(d: date) -> str:
     return f"{d:%b} {d.day}"
 
 
+def compare_note(cmp: dict | None) -> str:
+    if not cmp:
+        return ""
+    lab = lambda ym: date.fromisoformat(ym + "-01").strftime("%b %Y")
+    return (
+        f'<p class="foot">MoM / YoY deltas (Compare toggle in the controls row) are '
+        f'<b>calendar months</b> from the monthly events table, same perimeter and money '
+        f'definitions: MoM = {lab(cmp["month"])} vs {lab(cmp["prev"])}; '
+        f'YoY = {lab(cmp["month"])} vs {lab(cmp["yoy"])}. They describe whole months, '
+        f'not the trailing window shown in the main columns. Rates (bid rate, margin) '
+        f'are shown as percentage-point changes.</p>'
+    )
+
+
 def render(payload: dict) -> str:
     meta = payload["meta"]
     start = date.fromisoformat(meta["start_date"])
@@ -313,6 +380,7 @@ def render(payload: dict) -> str:
         "__ADOMAIN_TOP_N__": str(meta.get("adomain_top_n", ADOMAIN_TOP_N)),
         "__BENCHMARKS__": benchmarks,
         "__GENERATED_AT__": meta["generated_at"],
+        "__COMPARE_NOTE__": compare_note(meta.get("compare")),
     }
 
     html = TEMPLATE.read_text(encoding="utf-8")

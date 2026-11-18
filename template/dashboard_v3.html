@@ -61,6 +61,11 @@ button.tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;}
 .cc{font-weight:700;}
 .cname{color:var(--muted);font-weight:400;font-size:.85rem;margin-left:.4rem;}
 .foot{color:var(--muted);font-size:.8rem;font-style:italic;margin-top:1rem;}
+.delta{display:block;font-size:.7rem;font-weight:400;font-variant-numeric:tabular-nums;line-height:1.1;margin-top:.15rem;}
+.delta.up{color:var(--accent);}
+.delta.down{color:var(--dead);}
+button.tgl:disabled{opacity:.45;cursor:default;}
+
 .z{color:var(--muted);font-weight:400;}
 td small{font-size:.72rem;white-space:nowrap;}
 .ctrl{margin:0 0 .75rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;}
@@ -144,7 +149,7 @@ section[hidden],[hidden]{display:none;}
   <button class="tab" id="tab-active" role="tab" aria-selected="true" aria-controls="sec-active">Active Markets <span class="tab-n" id="am-n"></span></button>
   <button class="tab" id="tab-geo" role="tab" aria-selected="false" aria-controls="sec-geo">Geo Expansion <span class="tab-n" id="ge-n"></span></button>
 </div>
-<div class="ctrl"><button class="tgl" id="expall">Expand all</button><button class="tgl" id="compact" aria-pressed="false">Compact columns</button><button class="tgl" id="zeroonly" aria-pressed="false">Near-zero demand only</button><input type="search" id="q" placeholder="Filter countries…" aria-label="Filter countries"><span class="foot" style="margin:0">Click a country to see its editorial groups (top __TOP_N__ by volume, ≥__DETAIL_FLOOR_LABEL__ requests) · «SSPs →» drills into the demand side</span></div>
+<div class="ctrl"><button class="tgl" id="expall">Expand all</button><span class="foot" style="margin:0 .1rem 0 .4rem">Compare:</span><button class="tgl" data-cmp="off" aria-pressed="true">Off</button><button class="tgl" data-cmp="mom" aria-pressed="false">MoM</button><button class="tgl" data-cmp="yoy" aria-pressed="false">YoY</button><button class="tgl" id="compact" aria-pressed="false">Compact columns</button><button class="tgl" id="zeroonly" aria-pressed="false">Near-zero demand only</button><input type="search" id="q" placeholder="Filter countries…" aria-label="Filter countries"><span class="foot" style="margin:0">Click a country to see its editorial groups (top __TOP_N__ by volume, ≥__DETAIL_FLOOR_LABEL__ requests) · «SSPs →» drills into the demand side</span></div>
 
 <div id="sec-active" role="tabpanel" aria-labelledby="tab-active">
 <div class="stats">
@@ -194,6 +199,7 @@ section[hidden],[hidden]{display:none;}
 
 <p class="foot">Source: SSP events daily — all products, user-country grain, __WINDOW_LABEL__. Every user country with ≥__FLOOR_LABEL__ requests over the window is shown; Active Markets is the fixed list (__ACTIVE_MARKETS__), every other country falls under Geo Expansion. Editorial-group detail: top __TOP_N__ per country, ≥__DETAIL_FLOOR_LABEL__ requests. Demand drill: SSP pipes from the same events table; DSP identity and brands from the enriched demand responses table (Beachfront excluded). Reference bid rates (same window): __BENCHMARKS__.</p>
 <p class="foot">Money columns are <b>operational figures in USD from the event stream</b>: Revenue = Seedtag revenue (net paid − post-auction discounts + curator margin); Pub cost = the <b>HB net insert cost</b> only — the event stream's single valuation of publisher payout (it matches the supply funnel's HB-insert line and runs ~6% above actual payout on HB traffic; impression cost is the same payout valued twice and is deliberately not added); Margin = (Revenue − uncosted − Pub cost) / (Revenue − uncosted), where <b>uncosted</b> is Tag / SingleAdUnitTag / AMP revenue that carries no cost in the event stream — shown as a suffix, never folded into the ratio. These are the only revenue/cost figures that exist at user-country grain — they do <b>not</b> reconcile with Finance's Publisher Revenue (publisher-reported, EUR, monthly-average FX, publisher grain only). True publisher payout is defined per publisher, never per user country, so splitting it by the viewer's country is a proxy: read Pub cost and Margin as directional only. The Brands view shows revenue from the enriched demand table, a slightly different adjustment basis.</p>
+__COMPARE_NOTE__
 <p class="foot">Last refreshed __GENERATED_AT__ · rebuilt daily from Trino by GitHub Actions.</p>
 </div>
 <script>
@@ -319,7 +325,7 @@ function syncHash(){
   else if (state.view==="channels")
     h = "c/"+encodeURIComponent(state.c)+(state.g!=null ? "/"+encodeURIComponent(state.g) : "");
   else h = "a/"+[state.c, state.g==null ? "" : state.g, state.ch, state.dsp].map(encodeURIComponent).join("/");
-  history.replaceState(null, "", "#"+h);
+  history.replaceState(null, "", "#"+h+(cmpMode!=="off" ? ";cmp="+cmpMode : ""));
 }
 
 // --- View 1: supply (countries + editorial groups) --------------------------
@@ -354,6 +360,34 @@ function selectTab(which){
 }
 $("tab-active").addEventListener("click", ()=>selectTab("active"));
 $("tab-geo").addEventListener("click", ()=>selectTab("geo"));
+// --- MoM / YoY deltas (calendar months, opt-in via the Compare toggle) ------
+const CMP = DATA.meta.compare || null;
+let cmpMode = "off";
+function monthMetric(x, k){
+  if (!x) return null;
+  if (k==="br") return x.rq ? x.b/x.rq : null;
+  if (k==="mg"){ const base=(x.rv||0)-(x.ru||0); return base>0 ? (base-(x.pc||0))/base : null; }
+  return x[k]==null ? null : x[k];
+}
+// Delta line under a cell: % change for volumes/money, pp change for rates.
+// Pub cost colours inverted (cost going up is the bad direction).
+function dl(c, k){
+  if (cmpMode==="off" || !CMP) return "";
+  const cm = c.cmp;
+  if (!cm || !cm.m) return `<div class="delta z">–</div>`;
+  const cur = monthMetric(cm.m, k), prev = monthMetric(cmpMode==="mom" ? cm.p : cm.y, k);
+  if (cur==null) return `<div class="delta z">–</div>`;
+  if (prev==null) return `<div class="delta z" title="no data in the comparison month">new</div>`;
+  const rate = (k==="br" || k==="mg");
+  const d = rate ? (cur-prev)*100 : (prev===0 ? null : (cur-prev)/Math.abs(prev)*100);
+  if (d==null) return `<div class="delta z">new</div>`;
+  const fv = v => rate ? (v*100).toFixed(2)+"%" : (k==="rv"||k==="pc") ? money(v) : fmt(v);
+  const title = `${CMP.month}: ${fv(cur)} · ${cmpMode==="mom"?CMP.prev:CMP.yoy}: ${fv(prev)}`;
+  const flat = Math.abs(d) < 0.5, good = k==="pc" ? d<0 : d>0;
+  const cls = flat ? "delta z" : good ? "delta up" : "delta down";
+  const arrow = flat ? "·" : d>0 ? "▲" : "▼";
+  return `<div class="${cls}" title="${title}">${arrow} ${rate ? Math.abs(d).toFixed(2)+"pp" : Math.abs(d).toFixed(1)+"%"}</div>`;
+}
 function renderSection(cs, tbodyId, statPrefix){
   const tb = $(tbodyId);
   // Section tiles always reflect the whole section, not the current filter.
@@ -388,9 +422,9 @@ function renderSection(cs, tbodyId, statPrefix){
       : '<span class="pill ok">Active</span>';
     tr.innerHTML = `<td><span class="chev">▸</span><span class="cc">${esc(c.c)}</span><span class="cname">${NAMES[c.c]||""}</span></td>
       <td class="tdspark">${spark(c.c)}</td>
-      <td class="qbar" style="--w:${barW(c.rq, barMax).toFixed(1)}%">${fmt(c.rq)}</td><td>${fmt(c.b)}</td><td>${fmt(c.w)}</td><td>${fmt(c.i)}</td>
-      <td>${money(c.rv)}</td><td>${money(c.pc)}</td><td>${marginCell(c.rv,c.pc,c.ru)}</td>
-      <td>${pct(c.br)}</td><td>${pct(c.wr)}</td><td>${pct(c.fr)}</td><td>${status}</td>`;
+      <td class="qbar" style="--w:${barW(c.rq, barMax).toFixed(1)}%">${fmt(c.rq)}${dl(c,"rq")}</td><td>${fmt(c.b)}${dl(c,"b")}</td><td>${fmt(c.w)}</td><td>${fmt(c.i)}</td>
+      <td>${money(c.rv)}${dl(c,"rv")}</td><td>${money(c.pc)}${dl(c,"pc")}</td><td>${marginCell(c.rv,c.pc,c.ru)}${dl(c,"mg")}</td>
+      <td>${pct(c.br)}${dl(c,"br")}</td><td>${pct(c.wr)}</td><td>${pct(c.fr)}</td><td>${status}</td>`;
     const act = document.createElement("td");
     if (HAS_DRILL && chIdx[c.c]) act.appendChild(drillBtn("SSPs →", ()=>show({view:"channels", c:c.c, g:null})));
     tr.appendChild(act);
@@ -725,9 +759,22 @@ $("compact").addEventListener("click", ()=>{
   el.innerHTML = `<b>What changed (${ms[n-1]} vs ${ms[n-2]}):</b> ` + chips.map(c=>`<span class="chip">${esc(c)}</span>`).join(" ");
 })();
 
-// --- Deep link: apply #s/am|ge, #c/CC[/EG], #a/CC/EG?/CH/DSP on load ----------
+
+// Compare toggle (Off / MoM / YoY)
+function setCmp(mode){
+  cmpMode = mode;
+  document.querySelectorAll("[data-cmp]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.cmp===mode));
+  render();
+  if (typeof syncHash==="function") syncHash();
+}
+document.querySelectorAll("[data-cmp]").forEach(b=>b.addEventListener("click", ()=>setCmp(b.dataset.cmp)));
+if (!CMP) document.querySelectorAll("[data-cmp]").forEach(b=>{ b.disabled = true; b.title = "comparison data not present in this build"; });
+
+// --- Deep link: apply #s/am|ge, #c/CC[/EG], #a/CC/EG?/CH/DSP[;cmp=mom|yoy] on load
 (function(){
-  const h = location.hash.slice(1);
+  const [h, ...opts] = location.hash.slice(1).split(";");
+  const cm = (opts.find(o=>o.startsWith("cmp="))||"").slice(4);
+  if ((cm==="mom"||cm==="yoy") && CMP) setCmp(cm);
   if (!h) return;
   const parts = h.split("/").map(decodeURIComponent);
   try {

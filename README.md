@@ -44,6 +44,17 @@ Read Pub cost and Margin as directional, and never reconcile them against
 Finance's Publisher Revenue (publisher-reported, EUR, monthly-average FX,
 publisher grain only).
 
+**MoM / YoY.** The Compare toggle (Off / MoM / YoY) adds a ▲/▼ line under
+Requests, Bids, Bid rate, Revenue, Pub cost and Margin on the country rows.
+These compare **calendar months** — the last complete month vs the month
+before (MoM) and vs the same month a year earlier (YoY) — from
+`ssp_events_monthly_simplified`, with the same perimeter and money
+definitions (`sql/monthly_compare.sql`). The daily table keeps only ~36 days,
+so a "same window last year" comparison is impossible; the deltas therefore
+describe whole months, not the trailing window in the main columns, and the
+footer names the exact months. Rates are shown as percentage-point changes;
+a country absent from the comparison month reads "new".
+
 **The 'Others' caveat.** The demand table
 (`analytics.etl_ssp_responses_daily_enriched`) buckets `user_country` into 19
 key markets + `'Others'` — the bucketing is a hardcoded CASE in the dbt model
